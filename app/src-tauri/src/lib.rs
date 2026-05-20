@@ -1,5 +1,109 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::{env, fs, path::PathBuf};
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentState {
+    Thinking,
+    Running,
+    Editing,
+    WaitingApproval,
+    Done,
+    Error,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct HookEvent {
+    pub source: String,
+    pub state: AgentState,
+    pub label: String,
+    pub message: Option<String>,
+    pub session_id: Option<String>,
+    pub cwd: Option<String>,
+    pub timestamp: Option<String>,
+}
+
+fn agent_pets_dir() -> Option<std::path::PathBuf> {
+    std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".agent-pets"))
+}
+
+fn port_file_path() -> Option<std::path::PathBuf> {
+    agent_pets_dir().map(|d| d.join("port"))
+}
+
+fn write_port_file(port: u16) {
+    if let Some(path) = port_file_path() {
+        if let Some(parent) = path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        let _ = std::fs::write(&path, port.to_string());
+    }
+}
+
+fn remove_port_file() {
+    if let Some(path) = port_file_path() {
+        let _ = std::fs::remove_file(path);
+    }
+}
+
+fn start_event_server(app_handle: tauri::AppHandle) {
+    use std::io::Read;
+    use tauri::Emitter;
+
+    std::thread::spawn(move || {
+        // Probe for a free port using TcpListener, then bind tiny_http to it
+        let port = match std::net::TcpListener::bind("127.0.0.1:0")
+            .and_then(|l| l.local_addr().map(|a| a.port()))
+        {
+            Ok(p) => p,
+            Err(e) => {
+                eprintln!("agent-pets: could not find free port: {e}");
+                return;
+            }
+        };
+        write_port_file(port);
+
+        let server = match tiny_http::Server::http(format!("127.0.0.1:{port}")) {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("agent-pets: HTTP server failed to start: {e}");
+                remove_port_file();
+                return;
+            }
+        };
+
+        for mut request in server.incoming_requests() {
+            if request.method() != &tiny_http::Method::Post || request.url() != "/events" {
+                let _ = request.respond(
+                    tiny_http::Response::from_string("not found").with_status_code(404),
+                );
+                continue;
+            }
+
+            let mut body = String::new();
+            let read_ok = request.as_reader().read_to_string(&mut body).is_ok();
+
+            if !read_ok {
+                let _ = request.respond(
+                    tiny_http::Response::from_string("bad request").with_status_code(400),
+                );
+                continue;
+            }
+
+            match serde_json::from_str::<HookEvent>(&body) {
+                Ok(event) => {
+                    let _ = app_handle.emit("agent-state-changed", &event);
+                    let _ = request.respond(tiny_http::Response::from_string("ok"));
+                }
+                Err(_) => {
+                    let _ = request.respond(
+                        tiny_http::Response::from_string("bad request").with_status_code(400),
+                    );
+                }
+            }
+        }
+    });
+}
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -12,7 +116,7 @@ struct PetAsset {
     spritesheet_bytes: Vec<u8>,
 }
 
-#[derive(serde::Deserialize)]
+#[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct PetManifest {
     id: String,
@@ -61,7 +165,17 @@ fn load_pet_asset(pet_id: Option<String>) -> Result<PetAsset, String> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .setup(|app| {
+            let handle = app.handle().clone();
+            start_event_server(handle);
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![load_pet_asset, ping])
-        .run(tauri::generate_context!())
-        .expect("error while running Agent Pets");
+        .build(tauri::generate_context!())
+        .expect("error building Agent Pets")
+        .run(|_app, event| {
+            if let tauri::RunEvent::Exit = event {
+                remove_port_file();
+            }
+        });
 }
