@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { listen } from "@tauri-apps/api/event";
 import "./styles.css";
 
 type AgentState = "thinking" | "running" | "editing" | "waiting_approval" | "done" | "error";
@@ -13,6 +14,22 @@ type PetAsset = {
   spritesheetBytes: number[];
 };
 
+interface HookEventPayload {
+  source: string;
+  state: AgentState;
+  label: string;
+  message?: string;
+  session_id?: string;
+  cwd?: string;
+  timestamp?: string;
+}
+
+interface AnimationSpec {
+  row: number;
+  frameCount: number;
+  durations: number[];
+}
+
 const stateLabels: Record<AgentState, string> = {
   thinking: "Thinking",
   running: "Running",
@@ -21,6 +38,19 @@ const stateLabels: Record<AgentState, string> = {
   done: "Ready",
   error: "Needs attention",
 };
+
+const animations: Record<AgentState, AnimationSpec> = {
+  thinking:         { row: 8, frameCount: 6, durations: [150, 150, 150, 150, 150, 280] },
+  running:          { row: 7, frameCount: 6, durations: [120, 120, 120, 120, 120, 220] },
+  editing:          { row: 8, frameCount: 6, durations: [150, 150, 150, 150, 150, 280] },
+  waiting_approval: { row: 3, frameCount: 4, durations: [140, 140, 140, 280] },
+  done:             { row: 0, frameCount: 6, durations: [280, 110, 110, 140, 140, 320] },
+  error:            { row: 5, frameCount: 8, durations: [140, 140, 140, 140, 140, 140, 140, 240] },
+};
+
+let animationTimer: ReturnType<typeof setTimeout> | null = null;
+let spriteContext: CanvasRenderingContext2D | null = null;
+let spriteImage: HTMLImageElement | null = null;
 
 const app = document.querySelector<HTMLDivElement>("#app");
 const currentWindow = getCurrentWindow();
@@ -76,7 +106,6 @@ const sprite = app.querySelector<HTMLCanvasElement>(".pet-sprite");
 
 const frameWidth = 192;
 const frameHeight = 208;
-const idleDurations = [280, 110, 110, 140, 140, 320];
 const defaultPetSize = 128;
 const minPetSize = 64;
 const maxPetSize = 256;
@@ -116,15 +145,46 @@ function drawFrame(context: CanvasRenderingContext2D, image: HTMLImageElement, c
   );
 }
 
-async function loadMio() {
-  if (!sprite) {
+function setAnimation(
+  context: CanvasRenderingContext2D,
+  image: HTMLImageElement,
+  spec: AnimationSpec,
+) {
+  if (animationTimer !== null) {
+    clearTimeout(animationTimer);
+    animationTimer = null;
+  }
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (reducedMotion) {
+    drawFrame(context, image, 0, spec.row);
     return;
   }
+  let frame = 0;
+  const tick = () => {
+    drawFrame(context, image, frame, spec.row);
+    const duration = spec.durations[frame] ?? spec.durations[spec.durations.length - 1] ?? 180;
+    frame = (frame + 1) % spec.frameCount;
+    animationTimer = setTimeout(tick, duration);
+  };
+  tick();
+}
 
-  const context = sprite.getContext("2d");
-  if (!context) {
-    return;
+function applyAgentState(payload: HookEventPayload) {
+  const spec = animations[payload.state] ?? animations.done;
+  if (spriteContext && spriteImage) {
+    setAnimation(spriteContext, spriteImage, spec);
   }
+  if (speechTitle) speechTitle.textContent = payload.label;
+  if (message) {
+    message.textContent =
+      payload.message ?? stateLabels[payload.state] ?? payload.label;
+  }
+}
+
+async function loadMio() {
+  if (!sprite) return;
+  const context = sprite.getContext("2d");
+  if (!context) return;
 
   try {
     const asset = await invoke<PetAsset>("load_pet_asset", { petId: "mio" });
@@ -132,23 +192,16 @@ async function loadMio() {
     const objectUrl = bytesToObjectUrl(asset);
     image.src = objectUrl;
     image.onload = () => {
-      let frame = 0;
-      const animate = () => {
-        drawFrame(context, image, frame, 0);
-        const duration = idleDurations[frame] ?? 180;
-        frame = (frame + 1) % idleDurations.length;
-        window.setTimeout(animate, duration);
-      };
-      animate();
-      if (speechTitle) speechTitle.textContent = "ffmpegで動画を10MB未満に圧縮";
-      if (message) message.textContent = "わかる、ffmpeg は便利だけど呪文感が強いです。 覚えるならまずこれだけで十分...";
-      if (speech) speech.dataset.state = "done";
+      spriteContext = context;
+      spriteImage = image;
+      setAnimation(context, image, animations.done);
+      if (speechTitle) speechTitle.textContent = asset.displayName;
+      if (message) message.textContent = "is ready and waiting for your next prompt.";
     };
   } catch (error) {
     console.error(error);
     if (speechTitle) speechTitle.textContent = stateLabels.error;
     if (message) message.textContent = "Could not load Mio from ~/.codex/pets.";
-    if (speech) speech.dataset.state = "error";
   }
 }
 
@@ -243,3 +296,7 @@ resizeHandle?.addEventListener("pointerdown", (event) => {
 
 setPetSize(defaultPetSize);
 loadMio();
+
+listen<HookEventPayload>("agent-state-changed", (event) => {
+  applyAgentState(event.payload);
+}).catch(console.error);
