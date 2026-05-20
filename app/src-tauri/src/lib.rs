@@ -31,6 +31,20 @@ fn port_file_path() -> Option<std::path::PathBuf> {
     agent_pets_dir().map(|d| d.join("port"))
 }
 
+fn cleanup_stale_port_file() {
+    if let Some(path) = port_file_path() {
+        if let Ok(text) = std::fs::read_to_string(&path) {
+            let is_stale = text.trim().parse::<u16>().map_or(true, |port| {
+                std::net::TcpStream::connect(std::net::SocketAddr::from(([127, 0, 0, 1], port)))
+                    .is_err()
+            });
+            if is_stale {
+                let _ = std::fs::remove_file(&path);
+            }
+        }
+    }
+}
+
 fn write_port_file(port: u16) {
     if let Some(path) = port_file_path() {
         if let Some(parent) = path.parent() {
@@ -51,6 +65,8 @@ fn start_event_server(app_handle: tauri::AppHandle) {
     use tauri::Emitter;
 
     std::thread::spawn(move || {
+        cleanup_stale_port_file();
+
         // Probe for a free port using TcpListener, then bind tiny_http to it
         let port = match std::net::TcpListener::bind("127.0.0.1:0")
             .and_then(|l| l.local_addr().map(|a| a.port()))

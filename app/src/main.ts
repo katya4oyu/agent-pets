@@ -192,6 +192,7 @@ async function loadMio() {
     const objectUrl = bytesToObjectUrl(asset);
     image.src = objectUrl;
     image.onload = () => {
+      URL.revokeObjectURL(objectUrl);
       spriteContext = context;
       spriteImage = image;
       setAnimation(context, image, animations.done);
