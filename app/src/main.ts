@@ -62,11 +62,11 @@ if (!app) {
 app.innerHTML = `
   <section class="pet-shell" aria-label="Agent Pets status">
     <div class="speech-stack">
-      <div class="speech" data-state="thinking" data-tauri-drag-region>
+      <div class="speech" data-tauri-drag-region>
         <button class="speech-close" type="button" aria-label="Hide speech bubble">×</button>
         <span class="speech-status" aria-label="Agent is active"></span>
-        <p class="speech-title">ffmpegで動画を10MB未満に圧縮</p>
-        <p class="message">わかる、ffmpeg は便利だけど呪文感が強いです。 覚えるならまずこれだけで十分...</p>
+        <p class="speech-title">Agent Pets</p>
+        <p class="message">Loading mio from ~/.codex/pets…</p>
         <div class="speech-actions">
           <button class="reply-open" type="button">Reply</button>
         </div>
