@@ -11,8 +11,9 @@
         "hooks": [
           {
             "type": "command",
-            "command": "agent-pets-hook codex SessionStart",
-            "statusMessage": "Updating Agent Pets"
+            "command": "/absolute/path/to/agent-pets hook codex",
+            "statusMessage": "Updating Agent Pets",
+            "timeout": 1
           }
         ]
       }
@@ -22,7 +23,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "agent-pets-hook codex UserPromptSubmit"
+            "command": "/absolute/path/to/agent-pets hook codex",
+            "timeout": 1
           }
         ]
       }
@@ -33,7 +35,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "agent-pets-hook codex PreToolUse"
+            "command": "/absolute/path/to/agent-pets hook codex",
+            "timeout": 1
           }
         ]
       }
@@ -44,7 +47,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "agent-pets-hook codex PermissionRequest"
+            "command": "/absolute/path/to/agent-pets hook codex",
+            "timeout": 1
           }
         ]
       }
@@ -55,7 +59,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "agent-pets-hook codex PostToolUse"
+            "command": "/absolute/path/to/agent-pets hook codex",
+            "timeout": 1
           }
         ]
       }
@@ -65,7 +70,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "agent-pets-hook codex Stop"
+            "command": "/absolute/path/to/agent-pets hook codex",
+            "timeout": 1
           }
         ]
       }
@@ -91,10 +97,15 @@
 ## Adapter behavior
 
 1. Read JSON from stdin.
-2. Normalize it to the Agent Pets event schema.
-3. POST it to the local Agent Pets receiver.
-4. Exit quickly.
-5. Do not emit stdout by default.
+2. Read `hook_event_name` from the payload to identify the Codex event.
+3. Normalize it to the Agent Pets event schema.
+4. POST it to the local Agent Pets receiver.
+5. Exit quickly with status `0`.
+6. Do not emit stdout by default.
 
 Failures should not block Codex. If the app is not running, the adapter can
 silently exit with status `0` after a short timeout.
+
+Keep the HTTP timeout small, around `100-250ms`, even though the Codex hook
+configuration timeout is expressed in whole seconds. The configured `timeout: 1`
+is only an outer guard; the adapter itself should usually return much faster.

@@ -1,0 +1,13 @@
+{
+  "name": "agent-pets",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "pnpm --dir app dev",
+    "build": "pnpm --dir app build",
+    "preview": "pnpm --dir app preview",
+    "tauri": "pnpm --dir app tauri",
+    "tauri:dev": "pnpm --dir app tauri dev",
+    "check:rust": "cargo check --manifest-path app/src-tauri/Cargo.toml"
+  }
+}

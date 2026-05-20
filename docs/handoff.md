@@ -18,7 +18,7 @@ rounded speech bubble, and a spinner/status icon.
 
 - Repository: `agent-pets`
 - Product name: `Agent Pets`
-- Hook binary: `agent-pets-hook`
+- Hook command: `agent-pets hook <source>`
 - Config directory: `~/.agent-pets`
 
 ## First implementation target
@@ -44,6 +44,18 @@ Useful events:
 Hook adapters should be quick and side-effect-only. Avoid writing stdout unless
 the Codex hook event expects it. `Stop` expects JSON on stdout if stdout is used,
 so the safest default is no stdout.
+
+The hook command should read `hook_event_name` from stdin rather than requiring
+the event name as a CLI argument. The generated command for every Codex event can
+therefore be the same:
+
+```text
+/absolute/path/to/agent-pets hook codex
+```
+
+The adapter should use a tiny internal HTTP timeout, around `100-250ms`, and
+exit `0` if the app is unavailable. Agent Pets status updates are intentionally
+lossy; they must not slow down or block the coding agent.
 
 ## Event API
 
@@ -83,11 +95,15 @@ GitHub Copilot CLI:
 
 - Use CLI notification hooks.
 - Normalize system notification events into the same `/events` schema.
+- Prefer PascalCase hook keys where supported so the payload includes
+  `hook_event_name` and snake_case field names.
 
 ## Open decisions
 
-- Whether the hook adapter is Rust, shell, Node, or bundled with the Tauri app.
-- How the hook finds the current app port: fixed port, config file, or Unix
-  domain socket.
+- Whether the `agent-pets` CLI is a Rust binary in the Tauri workspace or a
+  separate helper package. Rust is the current preference to avoid a Bun/Node
+  runtime dependency.
+- How the hook finds the current app port: fixed port, config file, or later
+  Unix domain socket. Localhost HTTP is the first target.
 - Whether the overlay should be click-through by default.
 - Where to store bundled custom pet assets.
