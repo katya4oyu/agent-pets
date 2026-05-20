@@ -34,7 +34,7 @@ button {
   width: 100vw;
   height: 100vh;
   --pet-size: 128px;
-  --bubble-width: 280px;
+  --bubble-width: 266px;
 }
 
 /* ── Speech stack (positions the column of bubbles) ── */
@@ -73,12 +73,10 @@ button {
 .speech {
   overflow: hidden;
   padding: 5px 10px;
-  border: 1px solid rgba(29, 36, 51, 0.1);
+  border: none;
   border-radius: 12px;
   background: #ffffff;
-  box-shadow:
-    0 1px 1px rgba(29, 36, 51, 0.06),
-    0 6px 18px rgba(36, 43, 61, 0.08);
+  box-shadow: inset 0 0 0 1.2px rgba(29, 36, 51, 0.1);
   cursor: grab;
   user-select: none;
 }
@@ -87,7 +85,7 @@ button {
   margin: 0;
   overflow: hidden;
   color: #10131c;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
   line-height: 1.3;
   white-space: nowrap;
@@ -129,15 +127,15 @@ button {
 
 .speech-status {
   position: absolute;
-  top: 11px;
-  right: 12px;
+  top: 9px;
+  right: 10px;
   display: grid;
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   place-items: center;
   border-radius: 50%;
   /* active: spinner */
-  border: 2.5px solid rgba(17, 24, 39, 0.18);
+  border: 2px solid rgba(17, 24, 39, 0.18);
   border-top-color: rgba(17, 24, 39, 0.6);
   animation: spin 1s linear infinite;
 }
@@ -151,7 +149,7 @@ button {
 .speech[data-state="done"] .speech-status::after {
   content: "✓";
   color: #fff;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   line-height: 1;
 }
@@ -165,7 +163,7 @@ button {
 .speech[data-state="error"] .speech-status::after {
   content: "!";
   color: #fff;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   line-height: 1;
 }
@@ -175,7 +173,7 @@ button {
   margin: 4px 0 0;
   overflow: hidden;
   color: #4a5060;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   line-height: 1.3;
   -webkit-box-orient: vertical;
@@ -286,8 +284,8 @@ button {
   right: 0;
   z-index: 2;
   display: grid;
-  width: 30px;
-  height: 30px;
+  width: 26px;
+  height: 26px;
   place-items: center;
   border: 0;
   border-radius: 50%;
@@ -310,18 +308,14 @@ button {
 
 .session-count {
   display: none;
-  min-width: 22px;
-  height: 22px;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: 0;
-  border-radius: 999px;
-  background: #2563eb;
   color: #fff;
   font-size: 13px;
   font-weight: 800;
   line-height: 1;
+}
+
+.speech-hidden .bubble-toggle {
+  background: #16a34a;
 }
 
 .speech-hidden .toggle-chevron {
