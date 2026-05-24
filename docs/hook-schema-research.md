@@ -25,8 +25,9 @@ be checked against upstream docs later.
     `$COPILOT_HOME/hooks/agent-pets.json`
 - Use localhost HTTP from the adapter to the desktop app for the first
   implementation, but keep the adapter lossy and timeout-bound.
-- For Copilot, generate PascalCase event keys where possible so the payload uses
-  the VS Code compatible snake_case schema and includes `hook_event_name`.
+- Copilot has two documented payload formats. Agent Pets must parse both:
+  camelCase payloads from camelCase event keys and VS Code compatible snake_case
+  payloads from PascalCase event keys.
 
 ## Transport Notes
 
@@ -253,8 +254,9 @@ Source: https://docs.github.com/en/enterprise-cloud@latest/copilot/reference/hoo
     `preToolUse`
   - VS Code compatible format when configured with PascalCase event keys, e.g.
     `PreToolUse`
-- Agent Pets should generate PascalCase keys so the payload has snake_case
-  fields and `hook_event_name`.
+- Agent Pets should support both documented formats. PascalCase configuration
+  provides `hook_event_name`; camelCase configuration omits it, so the adapter
+  must infer the event from the documented payload shape.
 
 ### Copilot Events and Inputs
 
@@ -325,7 +327,7 @@ The adapter should parse these fields in order.
 | --- | --- | --- |
 | Codex | `hook_event_name` | optional CLI event arg only for future compatibility |
 | Claude Code | `hook_event_name` | optional CLI event arg only for future compatibility |
-| Copilot | `hook_event_name` for PascalCase config | derive from camelCase config fields only if user supplies non-Agent-Pets config |
+| Copilot | `hook_event_name` for PascalCase config | infer the event from documented camelCase payload shape |
 
 ### Session and Location
 

@@ -24,6 +24,20 @@ interface HookEventPayload {
   timestamp?: string;
 }
 
+interface PetSizePayload {
+  size: number;
+}
+
+interface PetSelectionPayload {
+  petId: string;
+}
+
+type SpeechMode = "show" | "hide" | "auto";
+
+interface SpeechModePayload {
+  mode: SpeechMode;
+}
+
 interface AnimationSpec {
   row: number;
   frameCount: number;
@@ -51,6 +65,8 @@ const animations: Record<AgentState, AnimationSpec> = {
 let animationTimer: ReturnType<typeof setTimeout> | null = null;
 let spriteContext: CanvasRenderingContext2D | null = null;
 let spriteImage: HTMLImageElement | null = null;
+let spriteObjectUrl: string | null = null;
+let currentAgentState: AgentState = "done";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 const currentWindow = getCurrentWindow();
@@ -85,6 +101,7 @@ app.innerHTML = `
         <canvas class="pet-sprite" width="192" height="208" aria-hidden="true" data-tauri-drag-region></canvas>
       </div>
       <button class="resize-handle" type="button" aria-label="Resize Agent Pets"></button>
+      <button class="setup-btn" type="button" aria-label="Setup hooks">⚙</button>
     </div>
   </section>
 `;
@@ -97,6 +114,7 @@ const pet = app.querySelector<HTMLElement>(".pet");
 const petWrap = app.querySelector<HTMLElement>(".pet-wrap");
 const toggleButton = app.querySelector<HTMLButtonElement>(".bubble-toggle");
 const resizeHandle = app.querySelector<HTMLButtonElement>(".resize-handle");
+const setupBtn = app.querySelector<HTMLButtonElement>(".setup-btn");
 const replyOpen = app.querySelector<HTMLButtonElement>(".reply-open");
 const replyForm = app.querySelector<HTMLFormElement>(".reply-form");
 const replyInput = app.querySelector<HTMLInputElement>(".reply-input");
@@ -110,6 +128,7 @@ const defaultPetSize = 128;
 const minPetSize = 64;
 const maxPetSize = 256;
 let speechVisible = true;
+let speechMode: SpeechMode = "show";
 
 function setPetSize(size: number) {
   const nextSize = Math.round(Math.min(maxPetSize, Math.max(minPetSize, size)));
@@ -122,6 +141,17 @@ function setSpeechVisible(nextVisible: boolean) {
   shell?.classList.remove("replying");
   toggleButton?.setAttribute("aria-pressed", String(speechVisible));
   toggleButton?.setAttribute("aria-label", speechVisible ? "Hide speech bubble" : "Show speech bubble");
+}
+
+function applySpeechMode(mode: SpeechMode) {
+  speechMode = mode;
+  if (speechMode === "show") {
+    setSpeechVisible(true);
+  } else if (speechMode === "hide") {
+    setSpeechVisible(false);
+  } else {
+    setSpeechVisible(currentAgentState !== "done");
+  }
 }
 
 function bytesToObjectUrl(asset: PetAsset): string {
@@ -170,6 +200,7 @@ function setAnimation(
 }
 
 function applyAgentState(payload: HookEventPayload) {
+  currentAgentState = payload.state;
   const spec = animations[payload.state] ?? animations.done;
   if (spriteContext && spriteImage) {
     setAnimation(spriteContext, spriteImage, spec);
@@ -179,20 +210,26 @@ function applyAgentState(payload: HookEventPayload) {
     message.textContent =
       payload.message ?? stateLabels[payload.state] ?? payload.label;
   }
+  if (speechMode === "auto") {
+    setSpeechVisible(payload.state !== "done");
+  }
 }
 
-async function loadMio() {
+async function loadPet(petId = "mio") {
   if (!sprite) return;
   const context = sprite.getContext("2d");
   if (!context) return;
 
   try {
-    const asset = await invoke<PetAsset>("load_pet_asset", { petId: "mio" });
+    const asset = await invoke<PetAsset>("load_pet_asset", { petId });
     const image = new Image();
     const objectUrl = bytesToObjectUrl(asset);
+    if (spriteObjectUrl) {
+      URL.revokeObjectURL(spriteObjectUrl);
+    }
+    spriteObjectUrl = objectUrl;
     image.src = objectUrl;
     image.onload = () => {
-      URL.revokeObjectURL(objectUrl);
       spriteContext = context;
       spriteImage = image;
       setAnimation(context, image, animations.done);
@@ -238,11 +275,13 @@ toggleButton?.addEventListener("pointerdown", (event) => {
 
 toggleButton?.addEventListener("click", (event) => {
   event.stopPropagation();
+  speechMode = speechVisible ? "hide" : "show";
   setSpeechVisible(!speechVisible);
 });
 
 closeButton?.addEventListener("click", (event) => {
   event.stopPropagation();
+  speechMode = "hide";
   setSpeechVisible(false);
 });
 
@@ -295,9 +334,34 @@ resizeHandle?.addEventListener("pointerdown", (event) => {
   window.addEventListener("pointerup", finish);
 });
 
+setupBtn?.addEventListener("click", async (event) => {
+  event.stopPropagation();
+  setupBtn.disabled = true;
+  try {
+    const result = await invoke<string>("setup_hooks", { agent: "all" });
+    if (message) message.textContent = result;
+  } catch (e) {
+    if (message) message.textContent = String(e);
+  } finally {
+    setupBtn.disabled = false;
+  }
+});
+
 setPetSize(defaultPetSize);
-loadMio();
+loadPet();
 
 listen<HookEventPayload>("agent-state-changed", (event) => {
   applyAgentState(event.payload);
+}).catch(console.error);
+
+listen<PetSizePayload>("set-pet-size", (event) => {
+  setPetSize(event.payload.size);
+}).catch(console.error);
+
+listen<PetSelectionPayload>("set-pet", (event) => {
+  void loadPet(event.payload.petId);
+}).catch(console.error);
+
+listen<SpeechModePayload>("set-speech-mode", (event) => {
+  applySpeechMode(event.payload.mode);
 }).catch(console.error);

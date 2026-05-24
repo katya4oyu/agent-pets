@@ -3,57 +3,57 @@
 See [Hook Schema Research](./hook-schema-research.md) for the official source
 URLs, event lists, payload fields, and normalization rules behind this design.
 
-Agent Pets should use one small adapter command across supported agents:
+Agent Pets should use one small `curl` command across supported agents:
 
 ```text
-agent-pets hook <source>
+p=$(cat ~/.agent-pets/port 2>/dev/null) && curl -s --max-time 0.2 -X POST "http://127.0.0.1:$p/events/<source>" -H 'Content-Type: application/json' -d @- 2>/dev/null; exit 0
 ```
 
-The adapter reads the hook JSON from stdin, normalizes it to the Agent Pets
-event schema, posts it to `http://127.0.0.1:<port>/events`, and exits quickly.
-It should avoid stdout and return success when the desktop app is unavailable so
-the agent workflow is never blocked by the companion.
+The command pipes hook JSON from stdin directly to the resident desktop app. The
+desktop app normalizes each agent payload server-side, emits an Agent Pets event,
+and the hook command exits quickly. The command should avoid stdout and return
+success when the desktop app is unavailable so the agent workflow is never
+blocked by the companion.
 
-Do not require the lifecycle event name as a CLI argument. Codex, Claude Code,
-and GitHub Copilot can all provide an event name in the hook payload when
-configured in the compatible shape:
+Do not require the lifecycle event name as a command argument. Codex and Claude
+Code provide `hook_event_name`. GitHub Copilot has two documented payload
+formats, so the server-side normalizer must also handle Copilot's camelCase
+payloads that do not include an event name:
 
 - Codex includes `hook_event_name`.
 - Claude Code includes `hook_event_name`.
 - GitHub Copilot includes `hook_event_name` when hooks are configured with
   PascalCase event keys such as `PreToolUse` instead of camelCase keys such as
   `preToolUse`.
+- GitHub Copilot camelCase payloads omit `hook_event_name`; infer the event from
+  the documented payload shape.
 
-The source argument is still useful because the surrounding payload schemas and
+The source path segment is useful because the surrounding payload schemas and
 tool names differ between agents. Event routing should be based on stdin first:
 
 ```text
-source = argv[2]
+source = path segment after /events/
 event = payload.hook_event_name
 tool = payload.tool_name
 cwd = payload.cwd
 session = payload.session_id
 ```
 
-If a future agent omits the event name, the adapter may accept an optional event
-argument as a fallback, but generated setup should not depend on it.
-
 ## Transport and performance
 
 The first transport should be a localhost HTTP POST to the resident desktop app:
 
 ```text
-POST http://127.0.0.1:<port>/events
+POST http://127.0.0.1:<port>/events/<source>
 ```
 
-HTTP is a good first choice because it is easy to call from a tiny CLI, easy to
-debug with `curl`, and works across the Tauri backend and any future helper
-process. A Unix domain socket can be revisited later if port discovery or local
+HTTP is a good first choice because it is easy to call with `curl` and easy to
+debug. A Unix domain socket can be revisited later if port discovery or local
 access control becomes painful.
 
-The hook adapter must never make the coding agent feel slower:
+The hook command must never make the coding agent feel slower:
 
-- Read stdin once, parse best-effort, send one POST, then exit.
+- Send stdin once with one POST, then exit.
 - Use a very small connect/request timeout, around `100-250ms`.
 - Exit `0` when the app is not running, the port file is missing, JSON parsing
   fails, or the POST times out.
@@ -86,8 +86,8 @@ Recommended command shape:
 ```json
 {
   "type": "command",
-  "command": "/absolute/path/to/agent-pets hook codex",
-  "timeout": 1
+  "command": "p=$(cat ~/.agent-pets/port 2>/dev/null) && curl -s --max-time 0.2 -X POST \"http://127.0.0.1:$p/events/codex\" -H 'Content-Type: application/json' -d @- 2>/dev/null; exit 0",
+  "timeout": 2
 }
 ```
 
@@ -131,10 +131,8 @@ Use lifecycle events such as `sessionStart`, `userPromptSubmitted`,
 `preToolUse`, `permissionRequest`, `postToolUse`, `postToolUseFailure`,
 `notification`, `agentStop`, `sessionEnd`, and `errorOccurred`.
 
-For Agent Pets setup, prefer PascalCase hook keys such as `SessionStart`,
-`UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `AgentStop`, and
-`ErrorOccurred` when supported, because Copilot then sends the VS Code compatible
-payload with `hook_event_name`, `session_id`, `tool_name`, and `tool_input`.
+Copilot supports both camelCase event keys and PascalCase VS Code compatible
+event keys. Agent Pets must parse both documented payload formats.
 
 Agent Pets setup should target local Copilot CLI user hooks first.
 

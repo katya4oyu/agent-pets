@@ -18,7 +18,7 @@ rounded speech bubble, and a spinner/status icon.
 
 - Repository: `agent-pets`
 - Product name: `Agent Pets`
-- Hook command: `agent-pets hook <source>`
+- Hook command: `curl` to `http://127.0.0.1:<port>/events/<source>`
 - Config directory: `~/.agent-pets`
 
 ## First implementation target
@@ -45,24 +45,25 @@ Hook adapters should be quick and side-effect-only. Avoid writing stdout unless
 the Codex hook event expects it. `Stop` expects JSON on stdout if stdout is used,
 so the safest default is no stdout.
 
-The hook command should read `hook_event_name` from stdin rather than requiring
-the event name as a CLI argument. The generated command for every Codex event can
-therefore be the same:
+The hook command should pipe stdin directly to the desktop app. The desktop app
+reads `hook_event_name` from the posted JSON and normalizes the event
+server-side. The generated command for every Codex event can therefore be the
+same:
 
 ```text
-/absolute/path/to/agent-pets hook codex
+p=$(cat ~/.agent-pets/port 2>/dev/null) && curl -s --max-time 0.2 -X POST "http://127.0.0.1:$p/events/codex" -H 'Content-Type: application/json' -d @- 2>/dev/null; exit 0
 ```
 
-The adapter should use a tiny internal HTTP timeout, around `100-250ms`, and
-exit `0` if the app is unavailable. Agent Pets status updates are intentionally
-lossy; they must not slow down or block the coding agent.
+The command should use a tiny HTTP timeout, around `100-250ms`, and exit `0` if
+the app is unavailable. Agent Pets status updates are intentionally lossy; they
+must not slow down or block the coding agent.
 
 ## Event API
 
 The desktop app should expose a localhost-only endpoint:
 
 ```text
-POST /events
+POST /events/<source>
 ```
 
 Example body:

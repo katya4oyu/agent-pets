@@ -11,7 +11,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/absolute/path/to/agent-pets hook codex",
+            "command": "p=$(cat ~/.agent-pets/port 2>/dev/null) && curl -s --max-time 0.2 -X POST \"http://127.0.0.1:$p/events/codex\" -H 'Content-Type: application/json' -d @- 2>/dev/null; exit 0",
             "statusMessage": "Updating Agent Pets",
             "timeout": 1
           }
@@ -23,7 +23,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/absolute/path/to/agent-pets hook codex",
+            "command": "p=$(cat ~/.agent-pets/port 2>/dev/null) && curl -s --max-time 0.2 -X POST \"http://127.0.0.1:$p/events/codex\" -H 'Content-Type: application/json' -d @- 2>/dev/null; exit 0",
             "timeout": 1
           }
         ]
@@ -35,7 +35,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/absolute/path/to/agent-pets hook codex",
+            "command": "p=$(cat ~/.agent-pets/port 2>/dev/null) && curl -s --max-time 0.2 -X POST \"http://127.0.0.1:$p/events/codex\" -H 'Content-Type: application/json' -d @- 2>/dev/null; exit 0",
             "timeout": 1
           }
         ]
@@ -47,7 +47,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/absolute/path/to/agent-pets hook codex",
+            "command": "p=$(cat ~/.agent-pets/port 2>/dev/null) && curl -s --max-time 0.2 -X POST \"http://127.0.0.1:$p/events/codex\" -H 'Content-Type: application/json' -d @- 2>/dev/null; exit 0",
             "timeout": 1
           }
         ]
@@ -59,7 +59,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/absolute/path/to/agent-pets hook codex",
+            "command": "p=$(cat ~/.agent-pets/port 2>/dev/null) && curl -s --max-time 0.2 -X POST \"http://127.0.0.1:$p/events/codex\" -H 'Content-Type: application/json' -d @- 2>/dev/null; exit 0",
             "timeout": 1
           }
         ]
@@ -70,7 +70,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/absolute/path/to/agent-pets hook codex",
+            "command": "p=$(cat ~/.agent-pets/port 2>/dev/null) && curl -s --max-time 0.2 -X POST \"http://127.0.0.1:$p/events/codex\" -H 'Content-Type: application/json' -d @- 2>/dev/null; exit 0",
             "timeout": 1
           }
         ]

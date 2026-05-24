@@ -30,10 +30,7 @@ through the same local event API.
 Codex Hooks / Claude Code Hooks / Copilot CLI Hooks
         |
         v
-agent-pets hook <source>
-        |
-        v
-http://127.0.0.1:<port>/events
+curl http://127.0.0.1:<port>/events/<source>
         |
         v
 Tauri app event store
@@ -47,9 +44,9 @@ Floating pet + speech bubble
 - Tauri v2 for the desktop app, tray, transparent overlay, and Rust backend.
 - A small Rust HTTP receiver bound to localhost.
 - A web frontend for the pet overlay UI.
-- A tiny hook adapter command that reads hook JSON from stdin, derives the event
-  from `hook_event_name`, posts normalized events to the local receiver, and
-  exits quickly without blocking the agent.
+- Hook commands that pipe stdin directly to the local receiver with `curl`.
+  The desktop app normalizes each agent payload server-side and exits the hook
+  command quickly without blocking the agent.
 
 ## Repository status
 
