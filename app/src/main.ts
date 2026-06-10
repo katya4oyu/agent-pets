@@ -2,6 +2,9 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
 import "./styles.css";
+import claudeCodeSvg from "@lobehub/icons-static-svg/icons/claudecode.svg?raw";
+import codexSvg from "@lobehub/icons-static-svg/icons/codex.svg?raw";
+import copilotSvg from "@lobehub/icons-static-svg/icons/copilot.svg?raw";
 
 type AgentState = "thinking" | "running" | "editing" | "waiting_approval" | "done" | "error";
 
@@ -21,7 +24,10 @@ interface HookEventPayload {
   message?: string;
   session_id?: string;
   cwd?: string;
+  project_name?: string;
   timestamp?: string;
+  terminal_program?: string;
+  terminal_session_id?: string;
 }
 
 interface PetSizePayload {
@@ -44,6 +50,11 @@ interface AnimationSpec {
   durations: number[];
 }
 
+interface SessionEntry {
+  state: AgentState;
+  element: HTMLElement;
+}
+
 const stateLabels: Record<AgentState, string> = {
   thinking: "Thinking",
   running: "Running",
@@ -51,6 +62,21 @@ const stateLabels: Record<AgentState, string> = {
   waiting_approval: "Waiting approval",
   done: "Ready",
   error: "Needs attention",
+};
+
+const STATE_PRIORITY: Record<AgentState, number> = {
+  error: 6,
+  waiting_approval: 5,
+  thinking: 4,
+  running: 3,
+  editing: 2,
+  done: 1,
+};
+
+const sourceConfig: Record<string, { label: string; color: string; svg: string }> = {
+  "claude-code": { label: "Claude Code", color: "#CC785C", svg: claudeCodeSvg },
+  codex:         { label: "Codex",       color: "#10A37F", svg: codexSvg },
+  copilot:       { label: "Copilot",     color: "#6F42C1", svg: copilotSvg },
 };
 
 const animations: Record<AgentState, AnimationSpec> = {
@@ -66,7 +92,8 @@ let animationTimer: ReturnType<typeof setTimeout> | null = null;
 let spriteContext: CanvasRenderingContext2D | null = null;
 let spriteImage: HTMLImageElement | null = null;
 let spriteObjectUrl: string | null = null;
-let currentAgentState: AgentState = "done";
+
+const sessions = new Map<string, SessionEntry>();
 
 const app = document.querySelector<HTMLDivElement>("#app");
 const currentWindow = getCurrentWindow();
@@ -78,24 +105,11 @@ if (!app) {
 app.innerHTML = `
   <section class="pet-shell" aria-label="Agent Pets status">
     <div class="speech-stack">
-      <div class="speech" data-tauri-drag-region>
-        <button class="speech-close" type="button" aria-label="Hide speech bubble">×</button>
-        <span class="speech-status" aria-label="Agent is active"></span>
-        <p class="speech-title">Agent Pets</p>
-        <p class="message">Loading mio from ~/.codex/pets…</p>
-        <div class="speech-actions">
-          <button class="reply-open" type="button">Reply</button>
-        </div>
-        <form class="reply-form" aria-label="Reply to agent">
-          <input class="reply-input" type="text" placeholder="Reply" />
-          <button class="reply-submit" type="submit">Reply</button>
-        </form>
-      </div>
     </div>
     <div class="pet-wrap">
       <button class="bubble-toggle" type="button" aria-label="Hide speech bubble" aria-pressed="true">
         <span class="toggle-chevron" aria-hidden="true"></span>
-        <span class="session-count" aria-label="1 active agent session">1</span>
+        <span class="session-count" aria-label="0 active agent sessions">0</span>
       </button>
       <div class="pet" role="img" aria-label="Mio" data-tauri-drag-region>
         <canvas class="pet-sprite" width="192" height="208" aria-hidden="true" data-tauri-drag-region></canvas>
@@ -108,18 +122,12 @@ app.innerHTML = `
 
 const shell = app.querySelector<HTMLElement>(".pet-shell");
 const speechStack = app.querySelector<HTMLElement>(".speech-stack");
-const speech = app.querySelector<HTMLElement>(".speech");
-const closeButton = app.querySelector<HTMLButtonElement>(".speech-close");
 const pet = app.querySelector<HTMLElement>(".pet");
 const petWrap = app.querySelector<HTMLElement>(".pet-wrap");
 const toggleButton = app.querySelector<HTMLButtonElement>(".bubble-toggle");
 const resizeHandle = app.querySelector<HTMLButtonElement>(".resize-handle");
 const setupBtn = app.querySelector<HTMLButtonElement>(".setup-btn");
-const replyOpen = app.querySelector<HTMLButtonElement>(".reply-open");
-const replyForm = app.querySelector<HTMLFormElement>(".reply-form");
-const replyInput = app.querySelector<HTMLInputElement>(".reply-input");
-const speechTitle = app.querySelector<HTMLParagraphElement>(".speech-title");
-const message = app.querySelector<HTMLParagraphElement>(".message");
+const sessionCountEl = app.querySelector<HTMLSpanElement>(".session-count");
 const sprite = app.querySelector<HTMLCanvasElement>(".pet-sprite");
 
 const frameWidth = 192;
@@ -138,7 +146,6 @@ function setPetSize(size: number) {
 function setSpeechVisible(nextVisible: boolean) {
   speechVisible = nextVisible;
   shell?.classList.toggle("speech-hidden", !speechVisible);
-  shell?.classList.remove("replying");
   toggleButton?.setAttribute("aria-pressed", String(speechVisible));
   toggleButton?.setAttribute("aria-label", speechVisible ? "Hide speech bubble" : "Show speech bubble");
 }
@@ -150,7 +157,7 @@ function applySpeechMode(mode: SpeechMode) {
   } else if (speechMode === "hide") {
     setSpeechVisible(false);
   } else {
-    setSpeechVisible(currentAgentState !== "done");
+    setSpeechVisible(getHighestPriorityState() !== "done");
   }
 }
 
@@ -199,19 +206,123 @@ function setAnimation(
   tick();
 }
 
-function applyAgentState(payload: HookEventPayload) {
-  currentAgentState = payload.state;
-  const spec = animations[payload.state] ?? animations.done;
+function getHighestPriorityState(): AgentState {
+  if (sessions.size === 0) return "done";
+  let best: AgentState = "done";
+  for (const { state } of sessions.values()) {
+    if (STATE_PRIORITY[state] > STATE_PRIORITY[best]) {
+      best = state;
+    }
+  }
+  return best;
+}
+
+function updatePetAnimation() {
+  const state = getHighestPriorityState();
+  const spec = animations[state] ?? animations.done;
   if (spriteContext && spriteImage) {
     setAnimation(spriteContext, spriteImage, spec);
   }
-  if (speechTitle) speechTitle.textContent = payload.label;
-  if (message) {
-    message.textContent =
-      payload.message ?? stateLabels[payload.state] ?? payload.label;
+}
+
+function updateSessionCount() {
+  const count = sessions.size;
+  if (sessionCountEl) {
+    sessionCountEl.textContent = String(count);
+    sessionCountEl.setAttribute(
+      "aria-label",
+      `${count} active agent session${count !== 1 ? "s" : ""}`,
+    );
   }
+}
+
+function createBubbleElement(key: string): HTMLElement {
+  const bubble = document.createElement("div");
+  bubble.className = "speech";
+  bubble.setAttribute("data-tauri-drag-region", "");
+  bubble.innerHTML = `
+    <button class="speech-close" type="button" aria-label="Remove session">×</button>
+    <div class="source-badge" aria-label="Source agent"></div>
+    <p class="speech-title"></p>
+    <p class="message"></p>
+    <p class="cwd-label" hidden></p>
+  `;
+  bubble.querySelector<HTMLButtonElement>(".speech-close")?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    removeBubble(key);
+  });
+  bubble.addEventListener("pointerdown", (event) => {
+    const target = event.target;
+    const interactive = target instanceof Element && Boolean(target.closest("button"));
+    if (event.button === 0 && !interactive) {
+      void currentWindow.startDragging();
+    }
+  });
+  speechStack?.appendChild(bubble);
+  return bubble;
+}
+
+function updateBubbleElement(bubble: HTMLElement, payload: HookEventPayload) {
+  bubble.setAttribute("data-state", payload.state);
+  const title = bubble.querySelector<HTMLParagraphElement>(".speech-title");
+  const msg = bubble.querySelector<HTMLParagraphElement>(".message");
+  const cwdLabel = bubble.querySelector<HTMLParagraphElement>(".cwd-label");
+  const sourceBadge = bubble.querySelector<HTMLDivElement>(".source-badge");
+
+  if (title) title.textContent = payload.label;
+  if (msg) {
+    msg.textContent = payload.message ?? stateLabels[payload.state] ?? payload.label;
+  }
+  const dir =
+    payload.project_name ??
+    (payload.cwd ? payload.cwd.split("/").filter(Boolean).at(-1) ?? null : null);
+  if (cwdLabel) {
+    cwdLabel.textContent = dir ?? "";
+    cwdLabel.hidden = !dir;
+  }
+  const cfg = sourceConfig[payload.source];
+  if (sourceBadge) {
+    if (cfg) {
+      sourceBadge.innerHTML = cfg.svg;
+      sourceBadge.setAttribute("data-source", payload.source);
+      sourceBadge.title = cfg.label;
+    } else {
+      sourceBadge.innerHTML = "";
+      sourceBadge.removeAttribute("data-source");
+      sourceBadge.title = payload.source;
+    }
+  }
+}
+
+function removeBubble(key: string) {
+  const session = sessions.get(key);
+  if (!session) return;
+  session.element.remove();
+  sessions.delete(key);
+  updateSessionCount();
+  updatePetAnimation();
   if (speechMode === "auto") {
-    setSpeechVisible(payload.state !== "done");
+    setSpeechVisible(getHighestPriorityState() !== "done");
+  }
+}
+
+function applyAgentState(payload: HookEventPayload) {
+  const key = payload.session_id
+    ? `${payload.source}:${payload.session_id}`
+    : payload.source;
+
+  let session = sessions.get(key);
+  if (!session) {
+    const element = createBubbleElement(key);
+    session = { state: payload.state, element };
+    sessions.set(key, session);
+  }
+  session.state = payload.state;
+  updateBubbleElement(session.element, payload);
+  updateSessionCount();
+  updatePetAnimation();
+  if (speechMode === "auto") {
+    setSpeechVisible(getHighestPriorityState() !== "done");
   }
 }
 
@@ -233,30 +344,11 @@ async function loadPet(petId = "mio") {
       spriteContext = context;
       spriteImage = image;
       setAnimation(context, image, animations.done);
-      if (speechTitle) speechTitle.textContent = asset.displayName;
-      if (message) message.textContent = "is ready and waiting for your next prompt.";
     };
   } catch (error) {
     console.error(error);
-    if (speechTitle) speechTitle.textContent = stateLabels.error;
-    if (message) message.textContent = "Could not load Mio from ~/.codex/pets.";
   }
 }
-
-speech?.addEventListener("pointerdown", (event) => {
-  const target = event.target;
-  const interactive = target instanceof Element && Boolean(target.closest("button, input, form"));
-  if (event.button === 0 && !interactive) {
-    void currentWindow.startDragging();
-  }
-});
-
-pet?.addEventListener("mousedown", (event) => {
-  if (event.button === 0) {
-    event.preventDefault();
-    void currentWindow.startDragging();
-  }
-});
 
 petWrap?.addEventListener("pointermove", (event) => {
   const bounds = petWrap.getBoundingClientRect();
@@ -269,6 +361,13 @@ petWrap?.addEventListener("pointerleave", () => {
   petWrap.classList.remove("resize-zone");
 });
 
+pet?.addEventListener("mousedown", (event) => {
+  if (event.button === 0) {
+    event.preventDefault();
+    void currentWindow.startDragging();
+  }
+});
+
 toggleButton?.addEventListener("pointerdown", (event) => {
   event.stopPropagation();
 });
@@ -277,39 +376,6 @@ toggleButton?.addEventListener("click", (event) => {
   event.stopPropagation();
   speechMode = speechVisible ? "hide" : "show";
   setSpeechVisible(!speechVisible);
-});
-
-closeButton?.addEventListener("click", (event) => {
-  event.stopPropagation();
-  speechMode = "hide";
-  setSpeechVisible(false);
-});
-
-replyOpen?.addEventListener("click", (event) => {
-  event.stopPropagation();
-  shell?.classList.add("replying");
-  window.setTimeout(() => replyInput?.focus(), 0);
-});
-
-replyForm?.addEventListener("pointerdown", (event) => {
-  event.stopPropagation();
-});
-
-replyForm?.addEventListener("submit", (event) => {
-  event.preventDefault();
-  event.stopPropagation();
-  const value = replyInput?.value.trim();
-  if (!value) {
-    replyInput?.focus();
-    return;
-  }
-  if (message) {
-    message.textContent = value;
-  }
-  if (replyInput) {
-    replyInput.value = "";
-  }
-  shell?.classList.remove("replying");
 });
 
 resizeHandle?.addEventListener("pointerdown", (event) => {
@@ -338,10 +404,9 @@ setupBtn?.addEventListener("click", async (event) => {
   event.stopPropagation();
   setupBtn.disabled = true;
   try {
-    const result = await invoke<string>("setup_hooks", { agent: "all" });
-    if (message) message.textContent = result;
+    await invoke<string>("setup_hooks", { agent: "all" });
   } catch (e) {
-    if (message) message.textContent = String(e);
+    console.error(e);
   } finally {
     setupBtn.disabled = false;
   }

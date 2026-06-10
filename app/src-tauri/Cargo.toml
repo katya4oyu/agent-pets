@@ -4,10 +4,15 @@ version = "0.1.0"
 description = "Desktop companion for agent progress and notifications"
 authors = ["Agent Pets Contributors"]
 edition = "2021"
+default-run = "agent-pets"
 
 [lib]
 name = "agent_pets_lib"
 crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "agent-pets-hook"
+path = "src/bin/agent_pets_hook.rs"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

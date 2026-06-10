@@ -11,7 +11,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "p=$(cat ~/.agent-pets/port 2>/dev/null) && curl -s --max-time 0.2 -X POST \"http://127.0.0.1:$p/events/codex\" -H 'Content-Type: application/json' -d @- 2>/dev/null; exit 0",
+            "command": "'/Users/example/.agent-pets/bin/agent-pets' hook codex",
             "statusMessage": "Updating Agent Pets",
             "timeout": 1
           }
@@ -23,7 +23,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "p=$(cat ~/.agent-pets/port 2>/dev/null) && curl -s --max-time 0.2 -X POST \"http://127.0.0.1:$p/events/codex\" -H 'Content-Type: application/json' -d @- 2>/dev/null; exit 0",
+            "command": "'/Users/example/.agent-pets/bin/agent-pets' hook codex",
             "timeout": 1
           }
         ]
@@ -35,7 +35,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "p=$(cat ~/.agent-pets/port 2>/dev/null) && curl -s --max-time 0.2 -X POST \"http://127.0.0.1:$p/events/codex\" -H 'Content-Type: application/json' -d @- 2>/dev/null; exit 0",
+            "command": "'/Users/example/.agent-pets/bin/agent-pets' hook codex",
             "timeout": 1
           }
         ]
@@ -47,7 +47,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "p=$(cat ~/.agent-pets/port 2>/dev/null) && curl -s --max-time 0.2 -X POST \"http://127.0.0.1:$p/events/codex\" -H 'Content-Type: application/json' -d @- 2>/dev/null; exit 0",
+            "command": "'/Users/example/.agent-pets/bin/agent-pets' hook codex",
             "timeout": 1
           }
         ]
@@ -59,7 +59,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "p=$(cat ~/.agent-pets/port 2>/dev/null) && curl -s --max-time 0.2 -X POST \"http://127.0.0.1:$p/events/codex\" -H 'Content-Type: application/json' -d @- 2>/dev/null; exit 0",
+            "command": "'/Users/example/.agent-pets/bin/agent-pets' hook codex",
             "timeout": 1
           }
         ]
@@ -70,7 +70,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "p=$(cat ~/.agent-pets/port 2>/dev/null) && curl -s --max-time 0.2 -X POST \"http://127.0.0.1:$p/events/codex\" -H 'Content-Type: application/json' -d @- 2>/dev/null; exit 0",
+            "command": "'/Users/example/.agent-pets/bin/agent-pets' hook codex",
             "timeout": 1
           }
         ]
@@ -97,9 +97,9 @@
 ## Adapter behavior
 
 1. Read JSON from stdin.
-2. Read `hook_event_name` from the payload to identify the Codex event.
-3. Normalize it to the Agent Pets event schema.
-4. POST it to the local Agent Pets receiver.
+2. Read the Agent Pets port file.
+3. POST the raw JSON to the local Agent Pets receiver.
+4. Let the desktop app read `hook_event_name` and normalize the event.
 5. Exit quickly with status `0`.
 6. Do not emit stdout by default.
 

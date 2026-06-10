@@ -3,10 +3,10 @@
 See [Hook Schema Research](./hook-schema-research.md) for the official source
 URLs, event lists, payload fields, and normalization rules behind this design.
 
-Agent Pets should use one small `curl` command across supported agents:
+Agent Pets should use one installed CLI command across supported agents:
 
 ```text
-p=$(cat ~/.agent-pets/port 2>/dev/null) && curl -s --max-time 0.2 -X POST "http://127.0.0.1:$p/events/<source>" -H 'Content-Type: application/json' -d @- 2>/dev/null; exit 0
+~/.agent-pets/bin/agent-pets hook <source>
 ```
 
 The command pipes hook JSON from stdin directly to the resident desktop app. The
@@ -47,9 +47,9 @@ The first transport should be a localhost HTTP POST to the resident desktop app:
 POST http://127.0.0.1:<port>/events/<source>
 ```
 
-HTTP is a good first choice because it is easy to call with `curl` and easy to
-debug. A Unix domain socket can be revisited later if port discovery or local
-access control becomes painful.
+HTTP remains an internal localhost transport between the CLI and desktop app.
+A Unix domain socket can be revisited later if port discovery or local access
+control becomes painful.
 
 The hook command must never make the coding agent feel slower:
 
@@ -86,8 +86,8 @@ Recommended command shape:
 ```json
 {
   "type": "command",
-  "command": "p=$(cat ~/.agent-pets/port 2>/dev/null) && curl -s --max-time 0.2 -X POST \"http://127.0.0.1:$p/events/codex\" -H 'Content-Type: application/json' -d @- 2>/dev/null; exit 0",
-  "timeout": 2
+  "command": "'/Users/example/.agent-pets/bin/agent-pets' hook codex",
+  "timeout": 1
 }
 ```
 

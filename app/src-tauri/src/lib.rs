@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::{env, fs, path::PathBuf, sync::Mutex};
+use std::{env, fs, path::PathBuf, process::Command, sync::Mutex};
 use tauri::{Emitter, Manager};
 
 // ── Public types ──────────────────────────────────────────────────────────────
@@ -24,7 +24,10 @@ pub struct HookEvent {
     pub message: Option<String>,
     pub session_id: Option<String>,
     pub cwd: Option<String>,
+    pub project_name: Option<String>,
     pub timestamp: Option<String>,
+    pub terminal_program: Option<String>,
+    pub terminal_session_id: Option<String>,
 }
 
 #[derive(Default)]
@@ -39,6 +42,7 @@ enum TrayMenuAction {
     SetPet(String),
     SetPetSize(u16),
     SetSpeechMode(&'static str),
+    InstallCli,
     SetupHooks(&'static str),
     ToggleAlwaysOnTop,
     OpenPetsFolder,
@@ -59,6 +63,7 @@ impl TrayMenuAction {
             "speech-show" => Some(Self::SetSpeechMode("show")),
             "speech-hide" => Some(Self::SetSpeechMode("hide")),
             "speech-auto" => Some(Self::SetSpeechMode("auto")),
+            "install-cli-tool" => Some(Self::InstallCli),
             "setup-hooks-all" => Some(Self::SetupHooks("all")),
             "setup-hooks-claude-code" => Some(Self::SetupHooks("claude-code")),
             "setup-hooks-codex" => Some(Self::SetupHooks("codex")),
@@ -89,8 +94,21 @@ struct PetSelectionPayload {
     pet_id: String,
 }
 
-pub fn is_legacy_hook_invocation(args: &[String]) -> bool {
-    args.get(1).is_some_and(|arg| arg == "hook")
+pub fn is_valid_hook_source(source: &str) -> bool {
+    matches!(source, "claude-code" | "codex" | "copilot")
+}
+
+pub fn cli_info() -> String {
+    format!("agent-pets {}", env!("CARGO_PKG_VERSION"))
+}
+
+pub fn read_agent_pets_port() -> Option<u16> {
+    let path = port_file_path()?;
+    read_agent_pets_port_at(&path)
+}
+
+fn read_agent_pets_port_at(path: &std::path::Path) -> Option<u16> {
+    fs::read_to_string(path).ok()?.trim().parse::<u16>().ok()
 }
 
 // ── Normalization types ───────────────────────────────────────────────────────
@@ -101,9 +119,12 @@ struct HookInput {
     tool_input: Option<Value>,
     message: Option<String>,
     error_message: Option<String>,
+    notification_type: Option<String>,
     session_id: Option<String>,
     cwd: Option<String>,
     timestamp: Option<String>,
+    terminal_program: Option<String>,
+    terminal_session_id: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -129,6 +150,12 @@ struct SnakeHookPayload {
     reason: Option<String>,
     #[serde(default)]
     error_context: Option<String>,
+    #[serde(default)]
+    notification_type: Option<String>,
+    #[serde(default)]
+    terminal_program: Option<String>,
+    #[serde(default)]
+    terminal_session_id: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -166,6 +193,8 @@ struct CopilotCamelPayload {
     trigger: Option<String>,
     #[serde(default)]
     custom_instructions: Option<String>,
+    #[serde(default)]
+    notification_type: Option<String>,
 }
 
 // ── Normalization functions ───────────────────────────────────────────────────
@@ -214,9 +243,13 @@ fn map_state(event_name: &str, tool_name: Option<&str>) -> Option<(AgentState, &
         "PostToolUse" | "postToolUse" => Some((AgentState::Running, "Tool completed")),
         "PostToolUseFailure" | "postToolUseFailure" | "ErrorOccurred" | "errorOccurred"
         | "PermissionDenied" | "permissionDenied" => Some((AgentState::Error, "Tool failed")),
+        "StopFailure" | "stopFailure" => Some((AgentState::Error, "Stopped with error")),
         "Stop" | "AgentStop" | "agentStop" | "SessionEnd" | "sessionEnd" | "SubagentStop"
         | "subagentStop" => Some((AgentState::Done, "Done")),
         "SessionStart" | "sessionStart" => Some((AgentState::Done, "Ready")),
+        "SubagentStart" | "subagentStart" => Some((AgentState::Running, "Subagent starting")),
+        "PreCompact" | "preCompact" => Some((AgentState::Thinking, "Compacting...")),
+        "PostCompact" | "postCompact" => Some((AgentState::Done, "Compacted")),
         _ => None,
     }
 }
@@ -234,7 +267,30 @@ fn extract_tool_message(tool_input: Option<&Value>, tool_name: Option<&str>) -> 
 }
 
 fn normalize_hook_input(input: HookInput, source: &str) -> Option<HookEvent> {
-    let (state, label) = map_state(&input.event_name, input.tool_name.as_deref())?;
+    let (mut state, mut label) = map_state(&input.event_name, input.tool_name.as_deref())?;
+
+    if matches!(input.event_name.as_str(), "Notification" | "notification") {
+        (state, label) = match input.notification_type.as_deref() {
+            Some(
+                "agent_idle"
+                | "agent_completed"
+                | "shell_completed"
+                | "shell_detached_completed",
+            ) => (AgentState::Done, "Done"),
+            Some("permission_prompt" | "elicitation_dialog") => {
+                (AgentState::WaitingApproval, "Waiting approval")
+            }
+            _ => (AgentState::WaitingApproval, "Needs attention"),
+        };
+    }
+
+    if matches!(input.event_name.as_str(), "PostToolUse" | "postToolUse")
+        && input.error_message.is_some()
+    {
+        state = AgentState::Error;
+        label = "Tool failed";
+    }
+
     let message = match input.event_name.as_str() {
         "UserPromptSubmit" | "userPromptSubmitted" => input.message,
         "Notification" | "notification" => input.message,
@@ -244,8 +300,12 @@ fn normalize_hook_input(input: HookInput, source: &str) -> Option<HookEvent> {
         "PostToolUseFailure" | "postToolUseFailure" | "ErrorOccurred" | "errorOccurred" => {
             input.error_message
         }
+        "PostToolUse" | "postToolUse" if state == AgentState::Error => input.error_message,
         _ => None,
     };
+
+    let project_name = input.cwd.as_deref().and_then(find_project_name);
+
     Some(HookEvent {
         source: source.to_string(),
         state,
@@ -253,7 +313,10 @@ fn normalize_hook_input(input: HookInput, source: &str) -> Option<HookEvent> {
         message,
         session_id: input.session_id,
         cwd: input.cwd,
+        project_name,
         timestamp: input.timestamp,
+        terminal_program: input.terminal_program,
+        terminal_session_id: input.terminal_session_id,
     })
 }
 
@@ -269,9 +332,12 @@ fn snake_to_input(payload: SnakeHookPayload) -> HookInput {
             .and_then(value_message)
             .or(payload.reason)
             .or(payload.error_context),
+        notification_type: payload.notification_type,
         session_id: payload.session_id,
         cwd: payload.cwd,
         timestamp: payload.timestamp,
+        terminal_program: payload.terminal_program,
+        terminal_session_id: payload.terminal_session_id,
     }
 }
 
@@ -324,9 +390,12 @@ fn copilot_camel_to_input(payload: CopilotCamelPayload) -> Option<HookInput> {
             .as_ref()
             .and_then(value_message)
             .or(payload.error_context),
+        notification_type: payload.notification_type,
         session_id: payload.session_id,
         cwd: payload.cwd,
         timestamp: payload.timestamp.map(|ts| ts.to_string()),
+        terminal_program: None,
+        terminal_session_id: None,
     })
 }
 
@@ -342,6 +411,20 @@ fn parse_hook_input(payload: &Value, source: &str) -> Option<HookInput> {
 fn normalize(payload: &Value, source: &str) -> Option<HookEvent> {
     let input = parse_hook_input(payload, source)?;
     normalize_hook_input(input, source)
+}
+
+fn find_project_name(cwd: &str) -> Option<String> {
+    let mut path = std::path::Path::new(cwd);
+    loop {
+        if path.join(".git").exists() {
+            return path.file_name().and_then(|n| n.to_str()).map(String::from);
+        }
+        let parent = path.parent()?;
+        if parent == path {
+            return None;
+        }
+        path = parent;
+    }
 }
 
 // ── Port file management ──────────────────────────────────────────────────────
@@ -485,17 +568,26 @@ fn write_json_atomic(path: &std::path::Path, value: &Value) -> Result<(), String
     Ok(())
 }
 
-fn upsert_event_hooks(hooks_obj: &mut serde_json::Map<String, Value>, event: &str, entry: Value) {
+fn upsert_codex_hook(hooks_obj: &mut serde_json::Map<String, Value>, event: &str, cmd: &str) {
     let arr = hooks_obj
         .entry(event.to_string())
         .or_insert_with(|| Value::Array(vec![]));
     if let Some(arr) = arr.as_array_mut() {
-        arr.retain(|e| {
-            !e.get("command")
-                .and_then(Value::as_str)
-                .map_or(false, |c| c.contains("agent-pets"))
+        arr.retain(|group| {
+            !group
+                .get("hooks")
+                .and_then(Value::as_array)
+                .map_or(false, |inner| {
+                    inner.iter().any(|h| {
+                        h.get("command")
+                            .and_then(Value::as_str)
+                            .map_or(false, |c| c.contains("agent-pets"))
+                    })
+                })
         });
-        arr.push(entry);
+        arr.push(serde_json::json!({
+            "hooks": [{"type": "command", "command": cmd, "timeout": 1}]
+        }));
     }
 }
 
@@ -523,7 +615,7 @@ fn upsert_claude_code_hook(hooks_obj: &mut serde_json::Map<String, Value>, event
         });
         arr.push(serde_json::json!({
             "matcher": "",
-            "hooks": [{"type": "command", "command": cmd}]
+            "hooks": [{"type": "command", "command": cmd, "async": true, "timeout": 1}]
         }));
     }
 }
@@ -543,15 +635,44 @@ fn remove_agent_pets_from_hook_array(arr: &mut Vec<Value>) -> usize {
     before - arr.len()
 }
 
-pub fn remove_agent_pets_hooks_from_codex(hooks: &mut Value) -> usize {
-    let Some(hooks_obj) = hooks.as_object_mut() else {
+pub fn remove_agent_pets_hooks_from_codex(root: &mut Value) -> usize {
+    let Some(root_obj) = root.as_object_mut() else {
         return 0;
     };
-    hooks_obj
-        .values_mut()
-        .filter_map(Value::as_array_mut)
-        .map(remove_agent_pets_from_hook_array)
-        .sum()
+
+    let mut removed = 0;
+
+    // New format: root["hooks"][EventName] = [matcher groups]
+    if let Some(hooks_sub) = root_obj.get_mut("hooks").and_then(Value::as_object_mut) {
+        for groups in hooks_sub.values_mut().filter_map(Value::as_array_mut) {
+            let before = groups.len();
+            groups.retain(|group| {
+                !group
+                    .get("hooks")
+                    .and_then(Value::as_array)
+                    .map_or(false, |inner| {
+                        inner.iter().any(|h| {
+                            h.get("command")
+                                .and_then(Value::as_str)
+                                .map_or(false, |c| c.contains("agent-pets"))
+                        })
+                    })
+            });
+            removed += before - groups.len();
+        }
+    }
+
+    // Old flat format: root[EventName] = [command entries] (backward compat migration)
+    for (key, value) in root_obj.iter_mut() {
+        if key == "hooks" {
+            continue;
+        }
+        if let Some(arr) = value.as_array_mut() {
+            removed += remove_agent_pets_from_hook_array(arr);
+        }
+    }
+
+    removed
 }
 
 pub fn remove_agent_pets_hooks_from_claude_settings(settings: &mut Value) -> usize {
@@ -605,6 +726,87 @@ pub fn is_agent_pets_copilot_config(config: &Value) -> bool {
     value_contains_agent_pets(config) && !value_contains_non_agent_pets_hook_command(config)
 }
 
+fn cli_install_path() -> Result<PathBuf, String> {
+    let home = home_dir()?;
+    Ok(home.join(".agent-pets").join("bin").join("agent-pets"))
+}
+
+fn cli_source_path() -> Result<PathBuf, String> {
+    let current =
+        env::current_exe().map_err(|error| format!("現在の実行ファイル取得に失敗: {error}"))?;
+    let file_name = if cfg!(windows) {
+        "agent-pets-hook.exe"
+    } else {
+        "agent-pets-hook"
+    };
+    let sibling = current.with_file_name(file_name);
+    if sibling.is_file() {
+        return Ok(sibling);
+    }
+    Err(format!(
+        "CLI バイナリが見つかりません: {}",
+        sibling.display()
+    ))
+}
+
+fn shell_quote(path: &std::path::Path) -> String {
+    let text = path.display().to_string();
+    format!("'{}'", text.replace('\'', "'\\''"))
+}
+
+fn hook_command(source: &str, cli_path: &std::path::Path) -> String {
+    format!("{} hook {source}", shell_quote(cli_path))
+}
+
+fn validate_cli_tool(path: &std::path::Path) -> Result<(), String> {
+    let output = Command::new(path)
+        .arg("cli-info")
+        .output()
+        .map_err(|error| format!("CLI の検証実行に失敗: {error}"))?;
+    if !output.status.success() {
+        return Err(format!(
+            "CLI の検証に失敗しました: exit status {}",
+            output.status
+        ));
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    if !stdout.trim_start().starts_with("agent-pets ") {
+        return Err("CLI の検証出力が不正です".to_string());
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn install_cli_tool() -> Result<String, String> {
+    let source = cli_source_path()?;
+    let destination = cli_install_path()?;
+    if source == destination {
+        validate_cli_tool(&destination)?;
+        return Ok(format!("Installed CLI: {}", destination.display()));
+    }
+    if let Some(parent) = destination.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|error| format!("CLI ディレクトリ作成に失敗: {error}"))?;
+    }
+    fs::copy(&source, &destination).map_err(|error| {
+        format!(
+            "{} から {} への CLI コピーに失敗: {error}",
+            source.display(),
+            destination.display()
+        )
+    })?;
+    validate_cli_tool(&destination)?;
+    Ok(format!("Installed CLI: {}", destination.display()))
+}
+
+fn ensure_cli_tool_installed() -> Result<PathBuf, String> {
+    let path = cli_install_path()?;
+    if validate_cli_tool(&path).is_err() {
+        install_cli_tool()?;
+    }
+    Ok(path)
+}
+
 fn setup_claude_code(cmd: &str) -> Result<String, String> {
     let home = home_dir()?;
     let path = home.join(".claude").join("settings.json");
@@ -628,6 +830,10 @@ fn setup_claude_code(cmd: &str) -> Result<String, String> {
             "PostToolUseFailure",
             "Notification",
             "Stop",
+            "SubagentStart",
+            "SubagentStop",
+            "PreCompact",
+            "PostCompact",
         ] {
             upsert_claude_code_hook(hooks, event, cmd);
         }
@@ -641,11 +847,22 @@ fn setup_codex(cmd: &str) -> Result<String, String> {
     let home = home_dir()?;
     let path = home.join(".codex").join("hooks.json");
 
-    let mut hooks = read_json_or_empty(&path)?;
+    let mut root = read_json_or_empty(&path)?;
     {
-        let hooks_obj = hooks
+        let root_obj = root
             .as_object_mut()
             .ok_or("hooks.json はオブジェクトではありません")?;
+
+        // Remove old flat-format entries at root level (migration)
+        for arr in root_obj.values_mut().filter_map(Value::as_array_mut) {
+            arr.retain(|e| !is_agent_pets_command(e));
+        }
+
+        let hooks_sub = root_obj
+            .entry("hooks")
+            .or_insert_with(|| Value::Object(Default::default()))
+            .as_object_mut()
+            .ok_or("hooks フィールドはオブジェクトではありません")?;
 
         for event in [
             "SessionStart",
@@ -654,16 +871,16 @@ fn setup_codex(cmd: &str) -> Result<String, String> {
             "PermissionRequest",
             "PostToolUse",
             "Stop",
+            "SubagentStart",
+            "SubagentStop",
+            "PreCompact",
+            "PostCompact",
         ] {
-            upsert_event_hooks(
-                hooks_obj,
-                event,
-                serde_json::json!({"type": "command", "command": cmd, "timeout": 2}),
-            );
+            upsert_codex_hook(hooks_sub, event, cmd);
         }
     }
 
-    write_json_atomic(&path, &hooks)?;
+    write_json_atomic(&path, &root)?;
     Ok(format!("Codex: {}", path.display()))
 }
 
@@ -684,7 +901,7 @@ fn setup_copilot(cmd: &str) -> Result<String, String> {
     ] {
         hooks_obj.insert(
             event.to_string(),
-            serde_json::json!([{"bash": cmd, "timeoutSec": 2}]),
+            serde_json::json!([{"bash": cmd, "timeoutSec": 1}]),
         );
     }
     let config = serde_json::json!({"version": 1, "hooks": hooks_obj});
@@ -697,21 +914,12 @@ fn setup_copilot(cmd: &str) -> Result<String, String> {
 
 #[tauri::command]
 fn setup_hooks(agent: String) -> Result<String, String> {
-    let home = home_dir()?;
-    let port_path = home.join(".agent-pets").join("port");
-    let port_path_str = port_path.display().to_string();
-
-    let make_cmd = |source: &str| {
-        format!(
-            "p=$(cat {port_path_str} 2>/dev/null) && \
-             curl -s --max-time 0.2 -X POST \
-             \"http://127.0.0.1:$p/events/{source}\" \
-             -H 'Content-Type: application/json' -d @- 2>/dev/null; exit 0"
-        )
-    };
+    let cli_path = ensure_cli_tool_installed()?;
+    let make_cmd = |source: &str| hook_command(source, &cli_path);
 
     let mut messages: Vec<String> = Vec::new();
     let mut errors: Vec<String> = Vec::new();
+    messages.push(format!("CLI: {}", cli_path.display()));
     let mut try_run = |result: Result<String, String>| match result {
         Ok(msg) => messages.push(msg),
         Err(e) => errors.push(e),
@@ -784,7 +992,10 @@ fn emit_setup_result(app: &tauri::AppHandle, result: Result<String, String>) {
         message: Some(message),
         session_id: None,
         cwd: None,
+        project_name: None,
         timestamp: None,
+        terminal_program: None,
+        terminal_session_id: None,
     };
     let _ = app.emit("agent-state-changed", event);
 }
@@ -810,6 +1021,9 @@ fn handle_tray_action(app: &tauri::AppHandle, action: TrayMenuAction) {
         }
         TrayMenuAction::SetSpeechMode(mode) => {
             let _ = app.emit("set-speech-mode", SpeechModePayload { mode });
+        }
+        TrayMenuAction::InstallCli => {
+            emit_setup_result(app, install_cli_tool());
         }
         TrayMenuAction::SetupHooks(agent) => {
             emit_setup_result(app, setup_hooks(agent.to_string()));
@@ -885,6 +1099,7 @@ fn setup_tray(app: &mut tauri::App) -> tauri::Result<()> {
         .item(&character_menu)
         .item(&size_menu)
         .item(&speech_menu)
+        .text("install-cli-tool", "Install CLI Tool")
         .item(&setup_menu)
         .separator()
         .item(&always_on_top)
@@ -988,7 +1203,12 @@ pub fn run() {
             start_event_server(handle);
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![load_pet_asset, ping, setup_hooks])
+        .invoke_handler(tauri::generate_handler![
+            load_pet_asset,
+            ping,
+            install_cli_tool,
+            setup_hooks
+        ])
         .build(tauri::generate_context!())
         .expect("error building Agent Pets")
         .run(|_app, event| {
@@ -1083,6 +1303,150 @@ mod tests {
             map_state("Notification", None),
             Some((AgentState::WaitingApproval, "Needs attention"))
         );
+    }
+
+    #[test]
+    fn notification_agent_idle_is_done() {
+        let payload = json!({
+            "hook_event_name": "Notification",
+            "notification_type": "agent_idle",
+            "message": "Claude is waiting for your input"
+        });
+        let event = normalize(&payload, "claude-code").unwrap();
+        assert!(matches!(event.state, AgentState::Done));
+        assert_eq!(event.label, "Done");
+    }
+
+    #[test]
+    fn notification_agent_completed_is_done() {
+        let payload = json!({
+            "hook_event_name": "Notification",
+            "notification_type": "agent_completed"
+        });
+        let event = normalize(&payload, "claude-code").unwrap();
+        assert!(matches!(event.state, AgentState::Done));
+    }
+
+    #[test]
+    fn notification_shell_completed_is_done() {
+        for nt in ["shell_completed", "shell_detached_completed"] {
+            let payload = json!({ "hook_event_name": "Notification", "notification_type": nt });
+            let event = normalize(&payload, "claude-code").unwrap();
+            assert!(matches!(event.state, AgentState::Done), "failed for {nt}");
+        }
+    }
+
+    #[test]
+    fn notification_permission_prompt_is_waiting_approval() {
+        let payload = json!({
+            "hook_event_name": "Notification",
+            "notification_type": "permission_prompt"
+        });
+        let event = normalize(&payload, "claude-code").unwrap();
+        assert!(matches!(event.state, AgentState::WaitingApproval));
+        assert_eq!(event.label, "Waiting approval");
+    }
+
+    #[test]
+    fn notification_elicitation_dialog_is_waiting_approval() {
+        let payload = json!({
+            "hook_event_name": "Notification",
+            "notification_type": "elicitation_dialog"
+        });
+        let event = normalize(&payload, "claude-code").unwrap();
+        assert!(matches!(event.state, AgentState::WaitingApproval));
+        assert_eq!(event.label, "Waiting approval");
+    }
+
+    #[test]
+    fn subagent_start_is_running() {
+        assert_eq!(
+            map_state("SubagentStart", None),
+            Some((AgentState::Running, "Subagent starting"))
+        );
+        assert_eq!(
+            map_state("subagentStart", None),
+            Some((AgentState::Running, "Subagent starting"))
+        );
+    }
+
+    #[test]
+    fn pre_compact_is_thinking() {
+        assert_eq!(
+            map_state("PreCompact", None),
+            Some((AgentState::Thinking, "Compacting..."))
+        );
+        assert_eq!(
+            map_state("preCompact", None),
+            Some((AgentState::Thinking, "Compacting..."))
+        );
+    }
+
+    #[test]
+    fn post_compact_is_done() {
+        assert_eq!(
+            map_state("PostCompact", None),
+            Some((AgentState::Done, "Compacted"))
+        );
+    }
+
+    #[test]
+    fn stop_failure_is_error() {
+        assert_eq!(
+            map_state("StopFailure", None),
+            Some((AgentState::Error, "Stopped with error"))
+        );
+    }
+
+    #[test]
+    fn post_tool_use_with_error_is_error() {
+        let payload = json!({
+            "hook_event_name": "PostToolUse",
+            "tool_name": "Bash",
+            "error": "command not found"
+        });
+        let event = normalize(&payload, "codex").unwrap();
+        assert!(matches!(event.state, AgentState::Error));
+        assert_eq!(event.label, "Tool failed");
+        assert_eq!(event.message.as_deref(), Some("command not found"));
+    }
+
+    #[test]
+    fn project_name_from_git_root() {
+        let project = std::env::var_os("CARGO_MANIFEST_DIR")
+            .map(std::path::PathBuf::from)
+            .and_then(|p| p.parent().map(|p| p.to_path_buf()));
+        if let Some(root) = project {
+            let name = find_project_name(root.to_str().unwrap());
+            assert!(name.is_some(), "expected project name from git root");
+        }
+    }
+
+    #[test]
+    fn project_name_set_in_normalized_event() {
+        let payload = json!({
+            "hook_event_name": "UserPromptSubmit",
+            "cwd": env!("CARGO_MANIFEST_DIR"),
+            "prompt": "hello"
+        });
+        let event = normalize(&payload, "claude-code").unwrap();
+        assert!(
+            event.project_name.is_some(),
+            "project_name should be set when cwd contains .git ancestor"
+        );
+    }
+
+    #[test]
+    fn terminal_fields_passed_through() {
+        let payload = json!({
+            "hook_event_name": "UserPromptSubmit",
+            "prompt": "test",
+            "terminal_program": "ghostty",
+            "terminal_session_id": "abc123"
+        });
+        let event = normalize(&payload, "claude-code").unwrap();
+        assert_eq!(event.terminal_program.as_deref(), Some("ghostty"));
+        assert_eq!(event.terminal_session_id.as_deref(), Some("abc123"));
     }
 
     #[test]
@@ -1287,6 +1651,10 @@ mod tests {
     #[test]
     fn tray_menu_action_maps_setup_hooks() {
         assert_eq!(
+            TrayMenuAction::from_id("install-cli-tool"),
+            Some(TrayMenuAction::InstallCli)
+        );
+        assert_eq!(
             TrayMenuAction::from_id("setup-hooks-all"),
             Some(TrayMenuAction::SetupHooks("all"))
         );
@@ -1317,18 +1685,96 @@ mod tests {
     }
 
     #[test]
-    fn legacy_hook_invocation_is_ignored() {
-        let args = vec![
-            "agent-pets".to_string(),
-            "hook".to_string(),
-            "claude-code".to_string(),
-        ];
-        assert!(is_legacy_hook_invocation(&args));
-        assert!(!is_legacy_hook_invocation(&["agent-pets".to_string()]));
+    fn hook_source_validation_accepts_only_supported_agents() {
+        assert!(is_valid_hook_source("codex"));
+        assert!(is_valid_hook_source("claude-code"));
+        assert!(is_valid_hook_source("copilot"));
+        assert!(!is_valid_hook_source("unknown"));
+        assert!(!is_valid_hook_source(""));
     }
 
     #[test]
-    fn remove_agent_pets_codex_hooks_keeps_unrelated_commands() {
+    fn cli_info_reports_package_name() {
+        assert!(cli_info().starts_with("agent-pets "));
+    }
+
+    #[test]
+    fn read_agent_pets_port_at_rejects_missing_and_invalid_files() {
+        let missing = env::temp_dir().join("agent-pets-missing-port-for-test");
+        let invalid =
+            env::temp_dir().join(format!("agent-pets-invalid-port-{}", std::process::id()));
+
+        let _ = fs::remove_file(&missing);
+        fs::write(&invalid, "not-a-port").unwrap();
+
+        assert_eq!(read_agent_pets_port_at(&missing), None);
+        assert_eq!(read_agent_pets_port_at(&invalid), None);
+
+        let _ = fs::remove_file(&invalid);
+    }
+
+    #[test]
+    fn read_agent_pets_port_at_reads_valid_port() {
+        let path = env::temp_dir().join(format!("agent-pets-valid-port-{}", std::process::id()));
+        fs::write(&path, "34567\n").unwrap();
+
+        assert_eq!(read_agent_pets_port_at(&path), Some(34567));
+
+        let _ = fs::remove_file(&path);
+    }
+
+    #[test]
+    fn hook_command_uses_installed_cli_path_not_curl() {
+        let path = PathBuf::from("/Users/example/.agent-pets/bin/agent-pets");
+        let command = hook_command("codex", &path);
+
+        assert_eq!(
+            command,
+            "'/Users/example/.agent-pets/bin/agent-pets' hook codex"
+        );
+        assert!(!command.contains("curl"));
+    }
+
+    #[test]
+    fn hook_command_quotes_spaces() {
+        let path = PathBuf::from("/Users/example/My Tools/agent-pets");
+        assert_eq!(
+            hook_command("copilot", &path),
+            "'/Users/example/My Tools/agent-pets' hook copilot"
+        );
+    }
+
+    #[test]
+    fn remove_agent_pets_codex_hooks_new_format() {
+        let mut hooks = json!({
+            "hooks": {
+                "UserPromptSubmit": [
+                    {"hooks": [{"type": "command", "command": "agent-pets hook codex", "timeout": 1}]},
+                    {"hooks": [{"type": "command", "command": "echo keep", "timeout": 2}]}
+                ],
+                "Stop": [
+                    {"hooks": [{"type": "command", "command": "agent-pets hook codex", "timeout": 1}]}
+                ]
+            }
+        });
+
+        assert_eq!(remove_agent_pets_hooks_from_codex(&mut hooks), 2);
+
+        assert_eq!(
+            hooks,
+            json!({
+                "hooks": {
+                    "UserPromptSubmit": [
+                        {"hooks": [{"type": "command", "command": "echo keep", "timeout": 2}]}
+                    ],
+                    "Stop": []
+                }
+            })
+        );
+    }
+
+    #[test]
+    fn remove_agent_pets_codex_hooks_old_format_migration() {
         let mut hooks = json!({
             "UserPromptSubmit": [
                 {"type": "command", "command": "agent-pets hook codex", "timeout": 2},
