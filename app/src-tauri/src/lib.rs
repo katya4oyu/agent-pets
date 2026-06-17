@@ -166,6 +166,10 @@ fn start_event_server(app_handle: tauri::AppHandle) {
             }
         };
 
+        // The engine owns the WorldModel and runs the registered skills; the
+        // server only moves bytes and turns the returned actions into effects.
+        let mut engine = agent_pets_core::Engine::new();
+
         for mut request in server.incoming_requests() {
             let source = parse_event_source_from_path(request.url());
             if request.method() != &tiny_http::Method::Post || source.is_empty() {
@@ -191,8 +195,12 @@ fn start_event_server(app_handle: tauri::AppHandle) {
                 }
             };
 
-            if let Some(event) = normalize(&payload, &source) {
-                let _ = app_handle.emit("agent-state-changed", &event);
+            for action in engine.handle_hook(&payload, &source) {
+                match action {
+                    agent_pets_core::NaviAction::Emit { event, payload } => {
+                        let _ = app_handle.emit(event, &payload);
+                    }
+                }
             }
             let _ = request.respond(tiny_http::Response::from_string("ok"));
         }

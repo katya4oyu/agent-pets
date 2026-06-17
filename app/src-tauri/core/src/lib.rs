@@ -27,7 +27,7 @@ pub enum AgentState {
     Error,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct HookEvent {
     pub source: String,
     pub state: AgentState,
@@ -441,6 +441,107 @@ impl WorldModel {
     /// Current state of a specific session, if present.
     pub fn session_state(&self, key: &str) -> Option<&AgentState> {
         self.sessions.get(key)
+    }
+}
+
+// ── Engine, actions, and skills ─────────────────────────────────────────────
+
+/// A side effect for the host (the Tauri app) to perform on behalf of the
+/// engine/skills. Representing effects as data — instead of calling Tauri
+/// directly — is what lets the whole pipeline be unit-tested headlessly and
+/// gives new features a single, typed extension point.
+#[derive(Debug, Clone, PartialEq)]
+pub enum NaviAction {
+    /// Emit a Tauri event (name + payload) to the frontend.
+    Emit {
+        event: &'static str,
+        payload: HookEvent,
+    },
+}
+
+/// Read-only view of the world handed to a skill while it reacts to an event.
+pub struct SkillCtx<'a> {
+    pub world: &'a WorldModel,
+}
+
+/// A unit of behavior. New features are added by implementing this trait and
+/// registering the skill with the [`Engine`] — without touching the transport
+/// or normalization layers.
+///
+/// This is the minimal Phase 1 form. Richer capabilities (declared permissions,
+/// persistent storage, UI surfaces, outbound agent dispatch) are deferred to
+/// later roadmap phases.
+pub trait Skill: Send {
+    /// Stable identifier, e.g. `"status-bubble"`.
+    fn id(&self) -> &str;
+
+    /// React to a normalized hook event, returning any actions to perform.
+    fn on_hook(&mut self, event: &HookEvent, ctx: &SkillCtx<'_>) -> Vec<NaviAction>;
+}
+
+/// Builtin skill reproducing the original behavior: forward every normalized
+/// event to the frontend as an `agent-state-changed` Tauri event.
+pub struct StatusBubble;
+
+impl Skill for StatusBubble {
+    fn id(&self) -> &str {
+        "status-bubble"
+    }
+
+    fn on_hook(&mut self, event: &HookEvent, _ctx: &SkillCtx<'_>) -> Vec<NaviAction> {
+        vec![NaviAction::Emit {
+            event: "agent-state-changed",
+            payload: event.clone(),
+        }]
+    }
+}
+
+/// Central pipeline: normalizes incoming payloads, keeps the [`WorldModel`] up
+/// to date, and runs the registered skills. The host turns the returned
+/// [`NaviAction`]s into real effects (Tauri emits, notifications, …).
+pub struct Engine {
+    world: WorldModel,
+    skills: Vec<Box<dyn Skill>>,
+}
+
+impl Engine {
+    /// Engine with the default builtin skill set (currently [`StatusBubble`]).
+    pub fn new() -> Self {
+        Self::with_skills(vec![Box::new(StatusBubble)])
+    }
+
+    /// Engine with an explicit skill set (used by tests and future config).
+    pub fn with_skills(skills: Vec<Box<dyn Skill>>) -> Self {
+        Self {
+            world: WorldModel::new(),
+            skills,
+        }
+    }
+
+    pub fn world(&self) -> &WorldModel {
+        &self.world
+    }
+
+    /// Process one raw hook payload from `source`: normalize it, update the
+    /// world model, and let every skill react. Unknown / unsupported events are
+    /// dropped (no world change, no actions), matching prior behavior.
+    pub fn handle_hook(&mut self, payload: &Value, source: &str) -> Vec<NaviAction> {
+        let Some(event) = normalize(payload, source) else {
+            return Vec::new();
+        };
+        self.world.apply(&event);
+        let ctx = SkillCtx { world: &self.world };
+        let mut actions = Vec::new();
+        for skill in &mut self.skills {
+            actions.extend(skill.on_hook(&event, &ctx));
+        }
+        actions
+    }
+}
+
+impl Default for Engine {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -938,5 +1039,110 @@ mod tests {
         assert!(!world.remove(&key), "removing twice is a no-op");
         assert!(world.is_empty());
         assert_eq!(world.highest_priority_state(), AgentState::Done);
+    }
+
+    // --- Engine / Skills ---
+
+    #[test]
+    fn status_bubble_forwards_event_as_agent_state_changed() {
+        let ev = event("codex", Some("s1"), AgentState::Running);
+        let world = WorldModel::new();
+        let ctx = SkillCtx { world: &world };
+        let mut skill = StatusBubble;
+        let actions = skill.on_hook(&ev, &ctx);
+        assert_eq!(
+            actions,
+            vec![NaviAction::Emit {
+                event: "agent-state-changed",
+                payload: ev,
+            }]
+        );
+    }
+
+    #[test]
+    fn engine_handles_valid_hook_and_updates_world() {
+        let mut engine = Engine::new();
+        let payload = json!({
+            "hook_event_name": "PreToolUse",
+            "session_id": "s1",
+            "tool_name": "Bash",
+            "tool_input": { "command": "cargo test" }
+        });
+        let actions = engine.handle_hook(&payload, "codex");
+        assert_eq!(actions.len(), 1);
+        match &actions[0] {
+            NaviAction::Emit { event, payload } => {
+                assert_eq!(*event, "agent-state-changed");
+                assert_eq!(payload.state, AgentState::Running);
+                assert_eq!(payload.source, "codex");
+            }
+        }
+        assert_eq!(engine.world().session_count(), 1);
+        assert_eq!(engine.world().highest_priority_state(), AgentState::Running);
+    }
+
+    #[test]
+    fn engine_drops_unknown_events_without_touching_world() {
+        let mut engine = Engine::new();
+        let payload = json!({ "hook_event_name": "SomeFutureEvent" });
+        let actions = engine.handle_hook(&payload, "claude-code");
+        assert!(actions.is_empty());
+        assert!(engine.world().is_empty());
+    }
+
+    #[test]
+    fn engine_tracks_highest_priority_across_sources() {
+        let mut engine = Engine::new();
+        engine.handle_hook(
+            &json!({"hook_event_name": "Stop", "session_id": "a"}),
+            "codex",
+        );
+        engine.handle_hook(
+            &json!({"hook_event_name": "PermissionRequest", "session_id": "b"}),
+            "claude-code",
+        );
+        assert_eq!(engine.world().session_count(), 2);
+        assert_eq!(
+            engine.world().highest_priority_state(),
+            AgentState::WaitingApproval
+        );
+    }
+
+    #[test]
+    fn engine_runs_custom_skills_alongside_builtin() {
+        use std::sync::atomic::{AtomicU32, Ordering};
+        use std::sync::Arc;
+
+        // A demo skill proving new behavior is added by registering a Skill,
+        // with no changes to transport or normalization.
+        struct CountErrors {
+            errors: Arc<AtomicU32>,
+        }
+        impl Skill for CountErrors {
+            fn id(&self) -> &str {
+                "count-errors"
+            }
+            fn on_hook(&mut self, event: &HookEvent, _ctx: &SkillCtx<'_>) -> Vec<NaviAction> {
+                if event.state == AgentState::Error {
+                    self.errors.fetch_add(1, Ordering::SeqCst);
+                }
+                Vec::new()
+            }
+        }
+
+        let errors = Arc::new(AtomicU32::new(0));
+        let mut engine = Engine::with_skills(vec![
+            Box::new(StatusBubble),
+            Box::new(CountErrors {
+                errors: errors.clone(),
+            }),
+        ]);
+
+        let actions = engine.handle_hook(
+            &json!({"hook_event_name": "PostToolUseFailure", "session_id": "s1"}),
+            "codex",
+        );
+        assert_eq!(actions.len(), 1, "StatusBubble still emits one action");
+        assert_eq!(errors.load(Ordering::SeqCst), 1, "CountErrors observed it");
     }
 }
