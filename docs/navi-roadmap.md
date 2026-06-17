@@ -8,10 +8,13 @@
 
 ## 方針サマリ
 
-- **頭脳**: オペレーター中心（既存エージェントを操縦）。重い実行は外部 Agent Backend（HermesAgent 等）へ委譲。
+- **頭脳**: オペレーター中心（既存エージェントを操縦）。重い実行は外部 Agent Backend（HermesAgent 等＝**仮称・未設計**）へ委譲。
 - **LLM**: 軽量・オプトイン。自律ふるまい・要約・ルーティング・チャットにのみ使用。
 - **拡張**: Skill（チップ）＋ Capability（権限スロット）でモジュラーに機能追加。
 - **リネーム**: 据え置き。安定後にまとめて `Navi` へ。
+- **実装ゲート（重要）**: 機能の追加は **体験設計＋E2E テスト計画が立ってから**。体験が未確定の構想
+  （Outbound 操縦・HermesAgent 連携など）は**予告に留め、先回りして実装しない**。当面の安全な実装範囲は
+  **Phase 1（既存仕様を変えない・既存テストで回帰を守れる内部リファクタ）まで**。
 
 ---
 
@@ -26,6 +29,10 @@
 | 4 | アバター自律化 | 自律移動・mood・チャット UI | なし（UI 追加） |
 | 5 | プラグイン解放 | 外部/WASM Skill host + manifest + capability sandbox | なし（追加機能） |
 | 6 | Navi 化 | リネーム・設定移行・マーケットプレイス | あり（互換シム付き） |
+
+> **Phase 1 が当面の実装範囲**。Phase 2 はルールベースまでを安全圏とする。
+> **Phase 3 以降（Outbound 操縦・HermesAgent・WASM プラグイン等）は、体験設計＋E2E テスト計画が
+> 固まるまで「将来像」として据え置く**（先回り実装しない）。
 
 ---
 
@@ -73,14 +80,19 @@
 
 ---
 
-## Phase 3 — 操縦（Outbound Connector）
+## Phase 3 — 操縦（Outbound Connector）【将来像・据え置き】
+
+> **着手ゲート**: Phase 3 以降は、**体験が設計され E2E テストで検証できる見通しが立ってから**着手する。
+> それまでは本書の「将来像／拡張余地の確保」に留め、先回りして実装しない。`HermesAgent` は仮称・未設計。
+> （当面の実装範囲は Phase 1。Phase 2 もルールベースまでを安全圏とし、Outbound には踏み込まない。）
 
 - **目的**: Navi が「気づく」だけでなく「適切な相棒に仕事を振り、見届ける」。
 - **作業**:
   1. **`AgentConnector` trait**（dispatch / status / cancel / capabilities）を定義。
   2. **初の Outbound backend を 1 つ実装**（例: Claude Code もしくは Codex の非対話起動）。
      まずは「Navi のチャット入力 → 選んだ backend に prompt を投げ、進捗を World Model に反映」。
-  3. **HermesAgent コネクタ**（重い実行委譲先）を 1st クラスの backend として接続。
+  3. **（将来）HermesAgent 連携**: HermesAgent は仮称・体験未設計のため、ここでは具体化しない。
+     連携 IF（CLI / HTTP / MCP 等）と体験が固まってから別途設計・実装する。
   4. **`agent:dispatch` capability** と dispatch 前のユーザー確認ポリシー。
 - **完了条件**: ユーザーが Navi 経由で 1 つの backend に仕事を投げ、状態が可視化される。
 - **オープン論点**: 非対話起動/継続入力の標準手段（PTY / CLI フラグ / ローカル RPC / MCP）。
