@@ -5,8 +5,18 @@ import "./styles.css";
 import claudeCodeSvg from "@lobehub/icons-static-svg/icons/claudecode.svg?raw";
 import codexSvg from "@lobehub/icons-static-svg/icons/codex.svg?raw";
 import copilotSvg from "@lobehub/icons-static-svg/icons/copilot.svg?raw";
-
-type AgentState = "thinking" | "running" | "editing" | "waiting_approval" | "done" | "error";
+import {
+  type AgentState,
+  type SpeechMode,
+  type HookEventPayload,
+  type AnimationSpec,
+  animations,
+  sessionKey,
+  highestPriorityState,
+  bubbleMessage,
+  bubbleDir,
+  isSpeechVisibleInAuto,
+} from "./state";
 
 type PetAsset = {
   id: string;
@@ -17,19 +27,6 @@ type PetAsset = {
   spritesheetBytes: number[];
 };
 
-interface HookEventPayload {
-  source: string;
-  state: AgentState;
-  label: string;
-  message?: string;
-  session_id?: string;
-  cwd?: string;
-  project_name?: string;
-  timestamp?: string;
-  terminal_program?: string;
-  terminal_session_id?: string;
-}
-
 interface PetSizePayload {
   size: number;
 }
@@ -38,16 +35,8 @@ interface PetSelectionPayload {
   petId: string;
 }
 
-type SpeechMode = "show" | "hide" | "auto";
-
 interface SpeechModePayload {
   mode: SpeechMode;
-}
-
-interface AnimationSpec {
-  row: number;
-  frameCount: number;
-  durations: number[];
 }
 
 interface SessionEntry {
@@ -55,37 +44,10 @@ interface SessionEntry {
   element: HTMLElement;
 }
 
-const stateLabels: Record<AgentState, string> = {
-  thinking: "Thinking",
-  running: "Running",
-  editing: "Editing",
-  waiting_approval: "Waiting approval",
-  done: "Ready",
-  error: "Needs attention",
-};
-
-const STATE_PRIORITY: Record<AgentState, number> = {
-  error: 6,
-  waiting_approval: 5,
-  thinking: 4,
-  running: 3,
-  editing: 2,
-  done: 1,
-};
-
 const sourceConfig: Record<string, { label: string; color: string; svg: string }> = {
   "claude-code": { label: "Claude Code", color: "#CC785C", svg: claudeCodeSvg },
   codex:         { label: "Codex",       color: "#10A37F", svg: codexSvg },
   copilot:       { label: "Copilot",     color: "#6F42C1", svg: copilotSvg },
-};
-
-const animations: Record<AgentState, AnimationSpec> = {
-  thinking:         { row: 8, frameCount: 6, durations: [150, 150, 150, 150, 150, 280] },
-  running:          { row: 7, frameCount: 6, durations: [120, 120, 120, 120, 120, 220] },
-  editing:          { row: 8, frameCount: 6, durations: [150, 150, 150, 150, 150, 280] },
-  waiting_approval: { row: 3, frameCount: 4, durations: [140, 140, 140, 280] },
-  done:             { row: 0, frameCount: 6, durations: [280, 110, 110, 140, 140, 320] },
-  error:            { row: 5, frameCount: 8, durations: [140, 140, 140, 140, 140, 140, 140, 240] },
 };
 
 let animationTimer: ReturnType<typeof setTimeout> | null = null;
@@ -157,7 +119,7 @@ function applySpeechMode(mode: SpeechMode) {
   } else if (speechMode === "hide") {
     setSpeechVisible(false);
   } else {
-    setSpeechVisible(getHighestPriorityState() !== "done");
+    setSpeechVisible(isSpeechVisibleInAuto(getHighestPriorityState()));
   }
 }
 
@@ -207,14 +169,7 @@ function setAnimation(
 }
 
 function getHighestPriorityState(): AgentState {
-  if (sessions.size === 0) return "done";
-  let best: AgentState = "done";
-  for (const { state } of sessions.values()) {
-    if (STATE_PRIORITY[state] > STATE_PRIORITY[best]) {
-      best = state;
-    }
-  }
-  return best;
+  return highestPriorityState(Array.from(sessions.values(), (entry) => entry.state));
 }
 
 function updatePetAnimation() {
@@ -271,11 +226,9 @@ function updateBubbleElement(bubble: HTMLElement, payload: HookEventPayload) {
 
   if (title) title.textContent = payload.label;
   if (msg) {
-    msg.textContent = payload.message ?? stateLabels[payload.state] ?? payload.label;
+    msg.textContent = bubbleMessage(payload);
   }
-  const dir =
-    payload.project_name ??
-    (payload.cwd ? payload.cwd.split("/").filter(Boolean).at(-1) ?? null : null);
+  const dir = bubbleDir(payload);
   if (cwdLabel) {
     cwdLabel.textContent = dir ?? "";
     cwdLabel.hidden = !dir;
@@ -302,14 +255,12 @@ function removeBubble(key: string) {
   updateSessionCount();
   updatePetAnimation();
   if (speechMode === "auto") {
-    setSpeechVisible(getHighestPriorityState() !== "done");
+    setSpeechVisible(isSpeechVisibleInAuto(getHighestPriorityState()));
   }
 }
 
 function applyAgentState(payload: HookEventPayload) {
-  const key = payload.session_id
-    ? `${payload.source}:${payload.session_id}`
-    : payload.source;
+  const key = sessionKey(payload);
 
   let session = sessions.get(key);
   if (!session) {
@@ -322,7 +273,7 @@ function applyAgentState(payload: HookEventPayload) {
   updateSessionCount();
   updatePetAnimation();
   if (speechMode === "auto") {
-    setSpeechVisible(getHighestPriorityState() !== "done");
+    setSpeechVisible(isSpeechVisibleInAuto(getHighestPriorityState()));
   }
 }
 

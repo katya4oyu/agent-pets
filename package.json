@@ -8,6 +8,7 @@
     "preview": "pnpm --dir app preview",
     "tauri": "pnpm --dir app tauri",
     "tauri:dev": "pnpm --dir app tauri dev",
+    "test": "pnpm --dir app test",
     "check:rust": "cargo check --manifest-path app/src-tauri/Cargo.toml"
   }
 }
