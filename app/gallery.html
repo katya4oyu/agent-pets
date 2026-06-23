@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>navi gallery</title>
+    <style>
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: system-ui, -apple-system, sans-serif;
+        background: repeating-conic-gradient(#e7e9ee 0 25%, #f4f5f8 0 50%) 0 0 / 28px 28px;
+      }
+      #gallery {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+        padding: 20px;
+      }
+      figure {
+        margin: 0;
+        display: grid;
+        place-items: center;
+        gap: 10px;
+        padding: 18px;
+        background: #fff;
+        border: 1px solid #e0e3e8;
+        border-radius: 14px;
+      }
+      figcaption {
+        font-size: 13px;
+        font-weight: 600;
+        color: #1d2433;
+      }
+      figcaption small {
+        color: #8a91a0;
+        font-weight: 500;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="gallery"></div>
+    <script type="module" src="/src/gallery.ts"></script>
+  </body>
+</html>
