@@ -1,6 +1,6 @@
-use agent_pets_lib::{
-    is_agent_pets_copilot_config, remove_agent_pets_hooks_from_claude_settings,
-    remove_agent_pets_hooks_from_codex,
+use navi_lib::{
+    is_navi_copilot_config, remove_navi_hooks_from_claude_settings,
+    remove_navi_hooks_from_codex,
 };
 use serde_json::Value;
 use std::{env, fs, path::Path};
@@ -51,7 +51,7 @@ fn run() -> Result<Vec<String>, String> {
 
     let codex_path = home.join(".codex").join("hooks.json");
     if let Some(mut hooks) = read_json(&codex_path)? {
-        let removed = remove_agent_pets_hooks_from_codex(&mut hooks);
+        let removed = remove_navi_hooks_from_codex(&mut hooks);
         if removed > 0 {
             write_json(&codex_path, &hooks)?;
         }
@@ -63,7 +63,7 @@ fn run() -> Result<Vec<String>, String> {
 
     let claude_path = home.join(".claude").join("settings.json");
     if let Some(mut settings) = read_json(&claude_path)? {
-        let removed = remove_agent_pets_hooks_from_claude_settings(&mut settings);
+        let removed = remove_navi_hooks_from_claude_settings(&mut settings);
         if removed > 0 {
             write_json(&claude_path, &settings)?;
         }
@@ -73,9 +73,9 @@ fn run() -> Result<Vec<String>, String> {
         ));
     }
 
-    let copilot_path = home.join(".copilot").join("hooks").join("agent-pets.json");
+    let copilot_path = home.join(".copilot").join("hooks").join("navi.json");
     if let Some(config) = read_json(&copilot_path)? {
-        if is_agent_pets_copilot_config(&config) {
+        if is_navi_copilot_config(&config) {
             fs::remove_file(&copilot_path)
                 .map_err(|error| format!("{} の削除に失敗: {error}", copilot_path.display()))?;
             messages.push(format!("Copilot: removed {}", copilot_path.display()));

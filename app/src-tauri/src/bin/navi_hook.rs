@@ -7,7 +7,7 @@ use std::{
 fn main() {
     match std::env::args().nth(1).as_deref() {
         Some("--version") | Some("cli-info") => {
-            println!("{}", agent_pets_lib::cli_info());
+            println!("{}", navi_lib::cli_info());
         }
         Some("hook") => {
             if let Some(source) = std::env::args().nth(2) {
@@ -41,10 +41,10 @@ fn inject_terminal_env(raw: &str) -> Option<String> {
 }
 
 fn run_hook_cli(source: &str) {
-    if !agent_pets_lib::is_valid_hook_source(source) {
+    if !navi_lib::is_valid_hook_source(source) {
         return;
     }
-    let Some(port) = agent_pets_lib::read_agent_pets_port() else {
+    let Some(port) = navi_lib::read_navi_port() else {
         return;
     };
 

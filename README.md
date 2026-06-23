@@ -1,36 +1,21 @@
-# Agent Pets
+# navi
 
 Desktop companions for agent progress, notifications, and attention requests.
 
-Agent Pets is a small desktop resident app concept inspired by Codex pets. The
-first milestone focuses on one pet, one speech bubble, and reliable status
-updates from Codex Hooks. Claude Code and GitHub Copilot CLI can be added later
-through the same local event API.
+navi is a desktop resident app inspired by [Codex Pets](https://github.com/openai/codex). The
+concept — visualizing coding agent state as a desktop pet — is extended to
+support Claude Code, GitHub Copilot, and other agents through a common local
+event API.
 
-## First milestone
-
-- Single floating pet overlay.
-- Speech bubble with the latest notification and current state.
-- Local event receiver for hook adapters.
-- Codex Hooks adapter first.
-- Tauri v2 app shell with tray controls.
-
-## Target states
-
-- `thinking`: user prompt submitted, agent is planning or reasoning.
-- `running`: tool or command is running.
-- `editing`: file edit is in progress.
-- `waiting_approval`: agent needs permission or input.
-- `done`: turn completed.
-- `error`: tool or hook failure worth surfacing.
+The name comes from the NetNavis of Mega Man Battle Network.
 
 ## Architecture
 
 ```text
-Codex Hooks / Claude Code Hooks / Copilot CLI Hooks
+Claude Code Hooks / Codex Hooks / Copilot CLI Hooks
         |
         v
-curl http://127.0.0.1:<port>/events/<source>
+navi-hook (CLI) → HTTP POST → localhost:<port>/events/<source>
         |
         v
 Tauri app event store
@@ -39,16 +24,23 @@ Tauri app event store
 Floating pet + speech bubble
 ```
 
-## Recommended stack
+## Agent states
 
-- Tauri v2 for the desktop app, tray, transparent overlay, and Rust backend.
-- A small Rust HTTP receiver bound to localhost.
-- A web frontend for the pet overlay UI.
-- Hook commands that pipe stdin directly to the local receiver with `curl`.
-  The desktop app normalizes each agent payload server-side and exits the hook
-  command quickly without blocking the agent.
+- `thinking`: user prompt submitted, agent is planning or reasoning.
+- `running`: tool or command is running.
+- `editing`: file edit is in progress.
+- `waiting_approval`: agent needs permission or input.
+- `done`: turn completed.
+- `error`: tool or hook failure worth surfacing.
 
-## Repository status
+## Stack
 
-This repository is currently a handoff scaffold. The next step is to create the
-Tauri v2 app and implement the Codex hook adapter.
+- Tauri v2 — desktop app, tray, transparent overlay, Rust backend.
+- `tiny_http` — localhost HTTP receiver.
+- Vite + TypeScript frontend — pet overlay UI.
+- `navi-hook` CLI — installed to `~/.navi/bin/navi-hook`, piped from agent hooks.
+
+## Repository
+
+Repository name stays `agent-pets` (the pet that hosts a NetNavi).
+Derived from [Codex Pets](https://github.com/openai/codex).
