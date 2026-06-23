@@ -2,6 +2,7 @@
   "name": "agent-pets",
   "private": true,
   "version": "0.1.0",
+  "packageManager": "pnpm@11.0.3",
   "scripts": {
     "dev": "pnpm --dir app dev",
     "build": "pnpm --dir app build",
