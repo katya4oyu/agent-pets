@@ -65,7 +65,7 @@ if (!app) {
 }
 
 app.innerHTML = `
-  <section class="pet-shell" aria-label="Agent Pets status">
+  <section class="pet-shell" aria-label="navi status">
     <div class="speech-stack">
     </div>
     <div class="pet-wrap">
@@ -76,7 +76,7 @@ app.innerHTML = `
       <div class="pet" role="img" aria-label="Mio" data-tauri-drag-region>
         <canvas class="pet-sprite" width="192" height="208" aria-hidden="true" data-tauri-drag-region></canvas>
       </div>
-      <button class="resize-handle" type="button" aria-label="Resize Agent Pets"></button>
+      <button class="resize-handle" type="button" aria-label="Resize navi"></button>
       <button class="setup-btn" type="button" aria-label="Setup hooks">⚙</button>
     </div>
   </section>

@@ -10,6 +10,7 @@ pub use agent_pets_core::{normalize, AgentState, HookEvent};
 #[derive(Default)]
 struct TrayState {
     always_on_top: Mutex<bool>,
+    tray: Mutex<Option<tauri::tray::TrayIcon>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -47,7 +48,7 @@ impl TrayMenuAction {
             "setup-hooks-copilot" => Some(Self::SetupHooks("copilot")),
             "always-on-top" => Some(Self::ToggleAlwaysOnTop),
             "open-pets-folder" => Some(Self::OpenPetsFolder),
-            "quit-agent-pets" => Some(Self::Quit),
+            "quit-navi" => Some(Self::Quit),
             _ => None,
         }
     }
@@ -76,26 +77,26 @@ pub fn is_valid_hook_source(source: &str) -> bool {
 }
 
 pub fn cli_info() -> String {
-    format!("agent-pets {}", env!("CARGO_PKG_VERSION"))
+    format!("navi {}", env!("CARGO_PKG_VERSION"))
 }
 
-pub fn read_agent_pets_port() -> Option<u16> {
+pub fn read_navi_port() -> Option<u16> {
     let path = port_file_path()?;
-    read_agent_pets_port_at(&path)
+    read_navi_port_at(&path)
 }
 
-fn read_agent_pets_port_at(path: &std::path::Path) -> Option<u16> {
+fn read_navi_port_at(path: &std::path::Path) -> Option<u16> {
     fs::read_to_string(path).ok()?.trim().parse::<u16>().ok()
 }
 
 // ── Port file management ──────────────────────────────────────────────────────
 
-fn agent_pets_dir() -> Option<PathBuf> {
-    std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".agent-pets"))
+fn navi_dir() -> Option<PathBuf> {
+    std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".navi"))
 }
 
 fn port_file_path() -> Option<PathBuf> {
-    agent_pets_dir().map(|d| d.join("port"))
+    navi_dir().map(|d| d.join("port"))
 }
 
 fn cleanup_stale_port_file() {
@@ -151,7 +152,7 @@ fn start_event_server(app_handle: tauri::AppHandle) {
         {
             Ok(p) => p,
             Err(e) => {
-                eprintln!("agent-pets: could not find free port: {e}");
+                eprintln!("navi: could not find free port: {e}");
                 return;
             }
         };
@@ -160,7 +161,7 @@ fn start_event_server(app_handle: tauri::AppHandle) {
         let server = match tiny_http::Server::http(format!("127.0.0.1:{port}")) {
             Ok(s) => s,
             Err(e) => {
-                eprintln!("agent-pets: HTTP server failed to start: {e}");
+                eprintln!("navi: HTTP server failed to start: {e}");
                 remove_port_file();
                 return;
             }
@@ -250,7 +251,7 @@ fn upsert_codex_hook(hooks_obj: &mut serde_json::Map<String, Value>, event: &str
                     inner.iter().any(|h| {
                         h.get("command")
                             .and_then(Value::as_str)
-                            .map_or(false, |c| c.contains("agent-pets"))
+                            .map_or(false, |c| c.contains("navi"))
                     })
                 })
         });
@@ -273,13 +274,13 @@ fn upsert_claude_code_hook(hooks_obj: &mut serde_json::Map<String, Value>, event
                     inner.iter().any(|h| {
                         h.get("command")
                             .and_then(Value::as_str)
-                            .map_or(false, |c| c.contains("agent-pets"))
+                            .map_or(false, |c| c.contains("navi"))
                     })
                 });
             let in_flat = group
                 .get("command")
                 .and_then(Value::as_str)
-                .map_or(false, |c| c.contains("agent-pets"));
+                .map_or(false, |c| c.contains("navi"));
             !(in_nested || in_flat)
         });
         arr.push(serde_json::json!({
@@ -289,22 +290,22 @@ fn upsert_claude_code_hook(hooks_obj: &mut serde_json::Map<String, Value>, event
     }
 }
 
-fn is_agent_pets_command(value: &Value) -> bool {
+fn is_navi_command(value: &Value) -> bool {
     ["command", "bash", "powershell"].iter().any(|key| {
         value
             .get(*key)
             .and_then(Value::as_str)
-            .is_some_and(|cmd| cmd.contains("agent-pets"))
+            .is_some_and(|cmd| cmd.contains("navi"))
     })
 }
 
-fn remove_agent_pets_from_hook_array(arr: &mut Vec<Value>) -> usize {
+fn remove_navi_from_hook_array(arr: &mut Vec<Value>) -> usize {
     let before = arr.len();
-    arr.retain(|entry| !is_agent_pets_command(entry));
+    arr.retain(|entry| !is_navi_command(entry));
     before - arr.len()
 }
 
-pub fn remove_agent_pets_hooks_from_codex(root: &mut Value) -> usize {
+pub fn remove_navi_hooks_from_codex(root: &mut Value) -> usize {
     let Some(root_obj) = root.as_object_mut() else {
         return 0;
     };
@@ -323,7 +324,7 @@ pub fn remove_agent_pets_hooks_from_codex(root: &mut Value) -> usize {
                         inner.iter().any(|h| {
                             h.get("command")
                                 .and_then(Value::as_str)
-                                .map_or(false, |c| c.contains("agent-pets"))
+                                .map_or(false, |c| c.contains("navi"))
                         })
                     })
             });
@@ -337,14 +338,14 @@ pub fn remove_agent_pets_hooks_from_codex(root: &mut Value) -> usize {
             continue;
         }
         if let Some(arr) = value.as_array_mut() {
-            removed += remove_agent_pets_from_hook_array(arr);
+            removed += remove_navi_from_hook_array(arr);
         }
     }
 
     removed
 }
 
-pub fn remove_agent_pets_hooks_from_claude_settings(settings: &mut Value) -> usize {
+pub fn remove_navi_hooks_from_claude_settings(settings: &mut Value) -> usize {
     let Some(hooks_obj) = settings.get_mut("hooks").and_then(Value::as_object_mut) else {
         return 0;
     };
@@ -352,12 +353,12 @@ pub fn remove_agent_pets_hooks_from_claude_settings(settings: &mut Value) -> usi
     let mut removed = 0;
     for groups in hooks_obj.values_mut().filter_map(Value::as_array_mut) {
         groups.retain_mut(|group| {
-            if is_agent_pets_command(group) {
+            if is_navi_command(group) {
                 removed += 1;
                 return false;
             }
             if let Some(inner) = group.get_mut("hooks").and_then(Value::as_array_mut) {
-                removed += remove_agent_pets_from_hook_array(inner);
+                removed += remove_navi_from_hook_array(inner);
                 return !inner.is_empty();
             }
             true
@@ -366,47 +367,47 @@ pub fn remove_agent_pets_hooks_from_claude_settings(settings: &mut Value) -> usi
     removed
 }
 
-fn value_contains_agent_pets(value: &Value) -> bool {
+fn value_contains_navi(value: &Value) -> bool {
     match value {
-        Value::String(text) => text.contains("agent-pets"),
-        Value::Array(items) => items.iter().any(value_contains_agent_pets),
-        Value::Object(obj) => obj.values().any(value_contains_agent_pets),
+        Value::String(text) => text.contains("navi"),
+        Value::Array(items) => items.iter().any(value_contains_navi),
+        Value::Object(obj) => obj.values().any(value_contains_navi),
         _ => false,
     }
 }
 
-fn value_contains_non_agent_pets_hook_command(value: &Value) -> bool {
+fn value_contains_non_navi_hook_command(value: &Value) -> bool {
     match value {
-        Value::Array(items) => items.iter().any(value_contains_non_agent_pets_hook_command),
+        Value::Array(items) => items.iter().any(value_contains_non_navi_hook_command),
         Value::Object(obj) => {
             let command_value = obj
                 .get("command")
                 .or_else(|| obj.get("bash"))
                 .or_else(|| obj.get("powershell"))
                 .and_then(Value::as_str);
-            command_value.is_some_and(|cmd| !cmd.contains("agent-pets"))
-                || obj.values().any(value_contains_non_agent_pets_hook_command)
+            command_value.is_some_and(|cmd| !cmd.contains("navi"))
+                || obj.values().any(value_contains_non_navi_hook_command)
         }
         _ => false,
     }
 }
 
-pub fn is_agent_pets_copilot_config(config: &Value) -> bool {
-    value_contains_agent_pets(config) && !value_contains_non_agent_pets_hook_command(config)
+pub fn is_navi_copilot_config(config: &Value) -> bool {
+    value_contains_navi(config) && !value_contains_non_navi_hook_command(config)
 }
 
 fn cli_install_path() -> Result<PathBuf, String> {
     let home = home_dir()?;
-    Ok(home.join(".agent-pets").join("bin").join("agent-pets"))
+    Ok(home.join(".navi").join("bin").join("navi-hook"))
 }
 
 fn cli_source_path() -> Result<PathBuf, String> {
     let current =
         env::current_exe().map_err(|error| format!("現在の実行ファイル取得に失敗: {error}"))?;
     let file_name = if cfg!(windows) {
-        "agent-pets-hook.exe"
+        "navi-hook.exe"
     } else {
-        "agent-pets-hook"
+        "navi-hook"
     };
     let sibling = current.with_file_name(file_name);
     if sibling.is_file() {
@@ -439,7 +440,7 @@ fn validate_cli_tool(path: &std::path::Path) -> Result<(), String> {
         ));
     }
     let stdout = String::from_utf8_lossy(&output.stdout);
-    if !stdout.trim_start().starts_with("agent-pets ") {
+    if !stdout.trim_start().starts_with("navi ") {
         return Err("CLI の検証出力が不正です".to_string());
     }
     Ok(())
@@ -524,7 +525,7 @@ fn setup_codex(cmd: &str) -> Result<String, String> {
 
         // Remove old flat-format entries at root level (migration)
         for arr in root_obj.values_mut().filter_map(Value::as_array_mut) {
-            arr.retain(|e| !is_agent_pets_command(e));
+            arr.retain(|e| !is_navi_command(e));
         }
 
         let hooks_sub = root_obj
@@ -555,7 +556,7 @@ fn setup_codex(cmd: &str) -> Result<String, String> {
 
 fn setup_copilot(cmd: &str) -> Result<String, String> {
     let home = home_dir()?;
-    let path = home.join(".copilot").join("hooks").join("agent-pets.json");
+    let path = home.join(".copilot").join("hooks").join("navi.json");
 
     let mut hooks_obj = serde_json::Map::new();
     for event in [
@@ -651,7 +652,7 @@ fn emit_setup_result(app: &tauri::AppHandle, result: Result<String, String>) {
         Err(message) => ("Hook setup failed", message),
     };
     let event = HookEvent {
-        source: "agent-pets".to_string(),
+        source: "navi".to_string(),
         state: if label == "Hooks configured" {
             AgentState::Done
         } else {
@@ -722,6 +723,14 @@ fn handle_tray_action(app: &tauri::AppHandle, action: TrayMenuAction) {
     }
 }
 
+/// テーマに対応するトレイアイコン画像（Light=濃紺 / Dark=オフホワイト）
+fn tray_icon_image(theme: tauri::Theme) -> tauri::image::Image<'static> {
+    match theme {
+        tauri::Theme::Dark => tauri::include_image!("icons/tray-dark.png"),
+        _ => tauri::include_image!("icons/tray-light.png"),
+    }
+}
+
 fn setup_tray(app: &mut tauri::App) -> tauri::Result<()> {
     use tauri::menu::{CheckMenuItem, MenuBuilder, MenuItem, SubmenuBuilder};
     use tauri::tray::TrayIconBuilder;
@@ -761,7 +770,7 @@ fn setup_tray(app: &mut tauri::App) -> tauri::Result<()> {
         true,
         None::<&str>,
     )?;
-    let title = MenuItem::with_id(app, "agent-pets-title", "Agent Pets", false, None::<&str>)?;
+    let title = MenuItem::with_id(app, "navi-title", "navi", false, None::<&str>)?;
 
     let menu = MenuBuilder::new(app)
         .item(&title)
@@ -778,27 +787,35 @@ fn setup_tray(app: &mut tauri::App) -> tauri::Result<()> {
         .item(&always_on_top)
         .text("open-pets-folder", "Open Pets Folder")
         .separator()
-        .text("quit-agent-pets", "Quit Agent Pets")
+        .text("quit-navi", "Quit navi")
         .build()?;
 
-    let mut tray = TrayIconBuilder::with_id("agent-pets").menu(&menu);
-    if let Some(icon) = app.default_window_icon() {
-        tray = tray.icon(icon.clone());
-    }
-    tray.on_menu_event(move |app, event| {
-        if let Some(action) = TrayMenuAction::from_id(event.id().as_ref()) {
-            if action == TrayMenuAction::ToggleAlwaysOnTop {
-                let state = app.state::<TrayState>();
-                let checked = {
-                    let always_on_top = state.always_on_top.lock().unwrap();
-                    !*always_on_top
-                };
-                let _ = always_on_top.set_checked(checked);
+    let theme = app
+        .get_webview_window("main")
+        .and_then(|w| w.theme().ok())
+        .unwrap_or(tauri::Theme::Light);
+
+    let tray = TrayIconBuilder::with_id("navi")
+        .icon(tray_icon_image(theme))
+        .icon_as_template(false)
+        .menu(&menu);
+    let tray = tray
+        .on_menu_event(move |app, event| {
+            if let Some(action) = TrayMenuAction::from_id(event.id().as_ref()) {
+                if action == TrayMenuAction::ToggleAlwaysOnTop {
+                    let state = app.state::<TrayState>();
+                    let checked = {
+                        let always_on_top = state.always_on_top.lock().unwrap();
+                        !*always_on_top
+                    };
+                    let _ = always_on_top.set_checked(checked);
+                }
+                handle_tray_action(app, action);
             }
-            handle_tray_action(app, action);
-        }
-    })
-    .build(app)?;
+        })
+        .build(app)?;
+
+    app.state::<TrayState>().tray.lock().unwrap().replace(tray);
 
     Ok(())
 }
@@ -868,8 +885,18 @@ pub fn run() {
     tauri::Builder::default()
         .manage(TrayState {
             always_on_top: Mutex::new(true),
+            tray: Mutex::new(None),
         })
         .plugin(tauri_plugin_opener::init())
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::ThemeChanged(theme) = event {
+                let state = window.app_handle().state::<TrayState>();
+                let tray_guard = state.tray.lock().unwrap();
+                if let Some(tray) = tray_guard.as_ref() {
+                    let _ = tray.set_icon(Some(tray_icon_image(*theme)));
+                }
+            }
+        })
         .setup(|app| {
             setup_tray(app)?;
             let handle = app.handle().clone();
@@ -883,7 +910,7 @@ pub fn run() {
             setup_hooks
         ])
         .build(tauri::generate_context!())
-        .expect("error building Agent Pets")
+        .expect("error building navi")
         .run(|_app, event| {
             if let tauri::RunEvent::Exit = event {
                 remove_port_file();
@@ -989,70 +1016,70 @@ mod tests {
 
     #[test]
     fn cli_info_reports_package_name() {
-        assert!(cli_info().starts_with("agent-pets "));
+        assert!(cli_info().starts_with("navi "));
     }
 
     #[test]
-    fn read_agent_pets_port_at_rejects_missing_and_invalid_files() {
-        let missing = env::temp_dir().join("agent-pets-missing-port-for-test");
+    fn read_navi_port_at_rejects_missing_and_invalid_files() {
+        let missing = env::temp_dir().join("navi-missing-port-for-test");
         let invalid =
-            env::temp_dir().join(format!("agent-pets-invalid-port-{}", std::process::id()));
+            env::temp_dir().join(format!("navi-invalid-port-{}", std::process::id()));
 
         let _ = fs::remove_file(&missing);
         fs::write(&invalid, "not-a-port").unwrap();
 
-        assert_eq!(read_agent_pets_port_at(&missing), None);
-        assert_eq!(read_agent_pets_port_at(&invalid), None);
+        assert_eq!(read_navi_port_at(&missing), None);
+        assert_eq!(read_navi_port_at(&invalid), None);
 
         let _ = fs::remove_file(&invalid);
     }
 
     #[test]
-    fn read_agent_pets_port_at_reads_valid_port() {
-        let path = env::temp_dir().join(format!("agent-pets-valid-port-{}", std::process::id()));
+    fn read_navi_port_at_reads_valid_port() {
+        let path = env::temp_dir().join(format!("navi-valid-port-{}", std::process::id()));
         fs::write(&path, "34567\n").unwrap();
 
-        assert_eq!(read_agent_pets_port_at(&path), Some(34567));
+        assert_eq!(read_navi_port_at(&path), Some(34567));
 
         let _ = fs::remove_file(&path);
     }
 
     #[test]
     fn hook_command_uses_installed_cli_path_not_curl() {
-        let path = PathBuf::from("/Users/example/.agent-pets/bin/agent-pets");
+        let path = PathBuf::from("/Users/example/.navi/bin/navi-hook");
         let command = hook_command("codex", &path);
 
         assert_eq!(
             command,
-            "'/Users/example/.agent-pets/bin/agent-pets' hook codex"
+            "'/Users/example/.navi/bin/navi-hook' hook codex"
         );
         assert!(!command.contains("curl"));
     }
 
     #[test]
     fn hook_command_quotes_spaces() {
-        let path = PathBuf::from("/Users/example/My Tools/agent-pets");
+        let path = PathBuf::from("/Users/example/My Tools/navi-hook");
         assert_eq!(
             hook_command("copilot", &path),
-            "'/Users/example/My Tools/agent-pets' hook copilot"
+            "'/Users/example/My Tools/navi-hook' hook copilot"
         );
     }
 
     #[test]
-    fn remove_agent_pets_codex_hooks_new_format() {
+    fn remove_navi_codex_hooks_new_format() {
         let mut hooks = json!({
             "hooks": {
                 "UserPromptSubmit": [
-                    {"hooks": [{"type": "command", "command": "agent-pets hook codex", "timeout": 1}]},
+                    {"hooks": [{"type": "command", "command": "navi-hook hook codex", "timeout": 1}]},
                     {"hooks": [{"type": "command", "command": "echo keep", "timeout": 2}]}
                 ],
                 "Stop": [
-                    {"hooks": [{"type": "command", "command": "agent-pets hook codex", "timeout": 1}]}
+                    {"hooks": [{"type": "command", "command": "navi-hook hook codex", "timeout": 1}]}
                 ]
             }
         });
 
-        assert_eq!(remove_agent_pets_hooks_from_codex(&mut hooks), 2);
+        assert_eq!(remove_navi_hooks_from_codex(&mut hooks), 2);
 
         assert_eq!(
             hooks,
@@ -1068,18 +1095,18 @@ mod tests {
     }
 
     #[test]
-    fn remove_agent_pets_codex_hooks_old_format_migration() {
+    fn remove_navi_codex_hooks_old_format_migration() {
         let mut hooks = json!({
             "UserPromptSubmit": [
-                {"type": "command", "command": "agent-pets hook codex", "timeout": 2},
+                {"type": "command", "command": "navi-hook hook codex", "timeout": 2},
                 {"type": "command", "command": "echo keep", "timeout": 2}
             ],
             "Stop": [
-                {"type": "command", "command": "p=$(cat ~/.agent-pets/port) && curl -s http://127.0.0.1:$p/events/codex; exit 0"}
+                {"type": "command", "command": "p=$(cat ~/.navi/port) && curl -s http://127.0.0.1:$p/events/codex; exit 0"}
             ]
         });
 
-        assert_eq!(remove_agent_pets_hooks_from_codex(&mut hooks), 2);
+        assert_eq!(remove_navi_hooks_from_codex(&mut hooks), 2);
 
         assert_eq!(
             hooks,
@@ -1093,14 +1120,14 @@ mod tests {
     }
 
     #[test]
-    fn remove_agent_pets_claude_hooks_keeps_non_agent_pets_handlers_in_group() {
+    fn remove_navi_claude_hooks_keeps_non_navi_handlers_in_group() {
         let mut settings = json!({
             "hooks": {
                 "PreToolUse": [
                     {
                         "matcher": "",
                         "hooks": [
-                            {"type": "command", "command": "agent-pets hook claude-code"},
+                            {"type": "command", "command": "navi-hook hook claude-code"},
                             {"type": "command", "command": "echo keep"}
                         ]
                     },
@@ -1110,13 +1137,13 @@ mod tests {
                     }
                 ],
                 "Stop": [
-                    {"type": "command", "command": "p=$(cat ~/.agent-pets/port) && curl -s http://127.0.0.1:$p/events/claude-code; exit 0"}
+                    {"type": "command", "command": "p=$(cat ~/.navi/port) && curl -s http://127.0.0.1:$p/events/claude-code; exit 0"}
                 ]
             }
         });
 
         assert_eq!(
-            remove_agent_pets_hooks_from_claude_settings(&mut settings),
+            remove_navi_hooks_from_claude_settings(&mut settings),
             2
         );
 
@@ -1143,14 +1170,14 @@ mod tests {
     }
 
     #[test]
-    fn remove_agent_pets_claude_hooks_counts_nested_handlers_once() {
+    fn remove_navi_claude_hooks_counts_nested_handlers_once() {
         let mut settings = json!({
             "hooks": {
                 "Stop": [
                     {
                         "matcher": "",
                         "hooks": [
-                            {"type": "command", "command": "agent-pets hook claude-code"}
+                            {"type": "command", "command": "navi-hook hook claude-code"}
                         ]
                     }
                 ]
@@ -1158,23 +1185,23 @@ mod tests {
         });
 
         assert_eq!(
-            remove_agent_pets_hooks_from_claude_settings(&mut settings),
+            remove_navi_hooks_from_claude_settings(&mut settings),
             1
         );
         assert_eq!(settings, json!({"hooks": {"Stop": []}}));
     }
 
     #[test]
-    fn copilot_agent_pets_hook_file_is_safe_to_remove() {
+    fn copilot_navi_hook_file_is_safe_to_remove() {
         let config = json!({
             "version": 1,
             "hooks": {
-                "Stop": [{"bash": "agent-pets hook copilot", "timeoutSec": 2}]
+                "Stop": [{"bash": "navi-hook hook copilot", "timeoutSec": 2}]
             }
         });
 
-        assert!(is_agent_pets_copilot_config(&config));
-        assert!(!is_agent_pets_copilot_config(&json!({
+        assert!(is_navi_copilot_config(&config));
+        assert!(!is_navi_copilot_config(&json!({
             "version": 1,
             "hooks": {
                 "Stop": [{"bash": "echo keep", "timeoutSec": 2}]
@@ -1184,7 +1211,7 @@ mod tests {
 
     #[test]
     fn tray_menu_action_ignores_unknown_items() {
-        assert_eq!(TrayMenuAction::from_id("agent-pets-title"), None);
+        assert_eq!(TrayMenuAction::from_id("navi-title"), None);
         assert_eq!(TrayMenuAction::from_id("missing"), None);
     }
 }
