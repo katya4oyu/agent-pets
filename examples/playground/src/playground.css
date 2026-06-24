@@ -24,6 +24,13 @@ button {
   font: inherit;
 }
 
+/* #playground は body グリッドに対して透明化し、.pg-stage / .pg-panel を
+   直接グリッドアイテムにする（さもないと wrapper が 1 カラム目を占有し、
+   ステージが高さ 0 で潰れる）。 */
+#playground {
+  display: contents;
+}
+
 /* ═══════════════════════════ Stage (透過オーバーレイの再現) ═══════════════════════════ */
 
 .pg-stage {
@@ -38,7 +45,7 @@ button {
   inset: 0;
   --pet-size: 128px;
   --pet-h: calc(var(--pet-size) * 208 / 192);
-  --stage-pad: 22px;
+  --stage-pad: 28px;
   --bubble-width: 266px;
   --bubble-pad-x: 10px;
   --bubble-pad-y: 9px;
@@ -74,7 +81,8 @@ button {
 
 .navi-bubbles {
   position: absolute;
-  right: var(--bubble-offset-x);
+  /* offset-x は「pet の右マージンからの追加オフセット」（パネルのラベルどおり） */
+  right: calc(var(--stage-pad) + var(--bubble-offset-x));
   bottom: calc(var(--stage-pad) + var(--pet-h) + var(--bubble-offset-y));
   width: var(--bubble-width);
   display: flex;
