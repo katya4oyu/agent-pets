@@ -2,14 +2,15 @@
 id: a7f3d2
 title: フロントエンドを packages/ui に切り出す（codex-pet はその内部に分離）
 type: chore
-status: in-progress
+status: done
 priority: high
 ---
 
 フロント表示層を `app`（Tauri）から切り出し、playground と app が同じ部品を使う構造にする。
 背景・用語・決定の根拠は `docs/frontend-packaging.md` / `docs/concept.md` / `CLAUDE.md` を参照。
 
-**パッケージ分割 + playground 独立アプリ化は実施済み。残りは navi 固有 UI の `@navi/ui` 抽出。**
+**この issue のスコープ（パッケージ分割 + playground 独立アプリ化）は完了。**
+続きは独立 issue に分割した: `c4b1e0`（navi 固有 UI 抽出）/ `d9a2f7`（playground チューニング環境）/ `e1f5c3`（app シェル移行）。
 
 ## ゴール
 
@@ -26,8 +27,13 @@ priority: high
 - [x] `examples/playground` を独立アプリ化（playground/gallery + mio 資産を移設、`@navi/ui` を import）。
 - [x] Cloudflare 公開対象を `examples/playground/dist` へ（root `wrangler.jsonc` / `build:playground`）。
 - [x] 既定の確定: パッケージ名 `@navi/ui`、要素名 `<navi-pet>` 維持、mio は playground にコピー。
-- [ ] **navi 固有 UI（`main.ts` 内の吹き出し生成・バッジ・ボタン）を `@navi/ui` へ抽出。** ← playground のデザインループで形を詰めてから。
-- [ ] （その後）`app` シェルを codex-pet/`@navi/ui` 利用へ移行（現状はシェル独自 canvas 描画。redesign spec のフェーズ2 相当）。
+- [x] 完了（コミット `dbc19e6` / `160506b`）。続きは下記 issue へ。
+
+## 続き（別 issue）
+
+- `c4b1e0` — navi 固有 UI（吹き出し・バッジ・ボタン・セッションカウント）を `@navi/ui` へ抽出。
+- `d9a2f7` — playground を pet×UI 統合デザインのチューニング環境にする（パラメータをスライダーで露出）。
+- `e1f5c3` — app シェル（`main.ts`）を codex-pet（`<navi-pet>`）描画へ移行。
 
 ## 注意
 
