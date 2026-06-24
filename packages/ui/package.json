@@ -1,0 +1,17 @@
+{
+  "name": "@navi/ui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "navi presentation layer. Internally split by origin: src/codex-pet/ is the codex-compatible sprite renderer; navi-specific UI lives alongside it.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./codex-pet": "./src/codex-pet/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  }
+}

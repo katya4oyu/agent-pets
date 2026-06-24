@@ -1,4 +1,4 @@
-import "./pet/navi-pet";
+import "@navi/ui";
 import "./playground.css";
 
 type AgentState = "done" | "thinking" | "running" | "editing" | "waiting_approval" | "error";

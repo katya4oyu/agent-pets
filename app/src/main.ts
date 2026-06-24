@@ -1,6 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
-import { getCurrentWindow } from "@tauri-apps/api/window";
-import { listen } from "@tauri-apps/api/event";
+import { invoke, listen, startDragging } from "./bridge";
 import "./styles.css";
 import claudeCodeSvg from "@lobehub/icons-static-svg/icons/claudecode.svg?raw";
 import codexSvg from "@lobehub/icons-static-svg/icons/codex.svg?raw";
@@ -58,7 +56,6 @@ let spriteObjectUrl: string | null = null;
 const sessions = new Map<string, SessionEntry>();
 
 const app = document.querySelector<HTMLDivElement>("#app");
-const currentWindow = getCurrentWindow();
 
 if (!app) {
   throw new Error("Missing #app root");
@@ -210,7 +207,7 @@ function createBubbleElement(key: string): HTMLElement {
     const target = event.target;
     const interactive = target instanceof Element && Boolean(target.closest("button"));
     if (event.button === 0 && !interactive) {
-      void currentWindow.startDragging();
+      void startDragging();
     }
   });
   speechStack?.appendChild(bubble);
@@ -315,7 +312,7 @@ petWrap?.addEventListener("pointerleave", () => {
 pet?.addEventListener("mousedown", (event) => {
   if (event.button === 0) {
     event.preventDefault();
-    void currentWindow.startDragging();
+    void startDragging();
   }
 });
 
@@ -366,18 +363,18 @@ setupBtn?.addEventListener("click", async (event) => {
 setPetSize(defaultPetSize);
 loadPet();
 
-listen<HookEventPayload>("agent-state-changed", (event) => {
-  applyAgentState(event.payload);
+listen<HookEventPayload>("agent-state-changed", (payload) => {
+  applyAgentState(payload);
 }).catch(console.error);
 
-listen<PetSizePayload>("set-pet-size", (event) => {
-  setPetSize(event.payload.size);
+listen<PetSizePayload>("set-pet-size", (payload) => {
+  setPetSize(payload.size);
 }).catch(console.error);
 
-listen<PetSelectionPayload>("set-pet", (event) => {
-  void loadPet(event.payload.petId);
+listen<PetSelectionPayload>("set-pet", (payload) => {
+  void loadPet(payload.petId);
 }).catch(console.error);
 
-listen<SpeechModePayload>("set-speech-mode", (event) => {
-  applySpeechMode(event.payload.mode);
+listen<SpeechModePayload>("set-speech-mode", (payload) => {
+  applySpeechMode(payload.mode);
 }).catch(console.error);
