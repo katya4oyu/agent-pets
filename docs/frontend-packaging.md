@@ -28,8 +28,12 @@
    - playground は「動くシェルを量産する場」ではなく、**パラメータと design を確定させるサンドボックス**。
 4. **`app`（Tauri シェル）も `ui` を import。**
    - シェル固有の配線（`bridge`、`sessions` 管理、イベント購読、トレイ連動）は app 側に残す（playground とは本質的に別物なので共通化しない）。
-5. **Cloudflare 公開対象を `app` から `examples/playground` へ移す。**
-   - 現在 `app/` にある暫定の `build:web` / `wrangler.jsonc` は playground 側へ寄せ直す。
+5. **Cloudflare は workspace ルートから配信する（サブフォルダを root にしない）。**
+   - リポジトリルートはルートのまま（pnpm workspace）。ルートに `build:playground` スクリプトを置き、ルート `wrangler.jsonc` の `assets.directory` で dist の場所だけを指す。
+   - Cloudflare Workers Builds 設定: Root directory = リポジトリルート、Build command = `pnpm install && pnpm build:playground`、Deploy = `npx wrangler deploy`（preview branch は `npx wrangler versions upload`）。
+   - dist の場所は現状 `./app/dist`。playground 分割後に `./examples/playground/dist` へ更新するだけ（root 構成は不変）。
+   - ルートからビルドするため、ルート `pnpm-workspace.yaml` で esbuild（Vite 依存）のビルドを承認する（pnpm 11 の `allowBuilds: esbuild: true`）。
+   - ※ 既に現状構成（playground 分割前）に適用済み: `build:web`→`build:playground` リネーム、`app/wrangler.jsonc`→ルート `wrangler.jsonc`（`./app/dist` 指定）。
 
 ## 想定構造（到達イメージ）
 

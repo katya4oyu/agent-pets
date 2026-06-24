@@ -3,9 +3,9 @@ import { fileURLToPath } from "node:url";
 
 const htmlEntry = (file: string) => fileURLToPath(new URL(`./${file}`, import.meta.url));
 
-// 公開（Cloudflare / Web）ビルドでは playground.html を `/`（index.html）として
-// 出力する。Vite は HTML エントリの出力名を元ファイル名から決めるため、
-// バンドル後に playground.html を index.html へ差し替える小さなプラグインで対応。
+// 公開（Cloudflare）ビルド `--mode playground` では playground.html を
+// `/`（index.html）として出力する。Vite は HTML エントリの出力名を元ファイル名から
+// 決めるため、バンドル後に playground.html を index.html へ差し替えるプラグインで対応。
 function playgroundAsIndex(): Plugin {
   return {
     name: "navi-playground-as-index",
@@ -23,17 +23,17 @@ function playgroundAsIndex(): Plugin {
 
 // 本番（Tauri）= index.html / 開発用 = playground.html の 2 エントリ。
 // dev では両方サーブされ、playground は /playground.html で開ける。
-// `--mode web`（pnpm run build:web）では playground だけを `/` に出力する。
+// `--mode playground`（pnpm run build:playground）では playground だけを `/` に出力する。
 export default defineConfig(({ mode }) => {
-  const web = mode === "web";
+  const playgroundOnly = mode === "playground";
 
   return {
     // Tauri の dev サーバーを邪魔しないよう Vite のログは既定のまま。
     clearScreen: false,
-    plugins: web ? [playgroundAsIndex()] : [],
+    plugins: playgroundOnly ? [playgroundAsIndex()] : [],
     build: {
       rollupOptions: {
-        input: web
+        input: playgroundOnly
           ? { playground: htmlEntry("playground.html") }
           : {
               main: htmlEntry("index.html"),

@@ -2,4 +2,3 @@
 /dist
 /src-tauri/target
 /.vite
-/.wrangler

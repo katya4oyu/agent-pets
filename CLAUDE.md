@@ -12,8 +12,8 @@ pnpm workspace; all frontend code lives under `app/`. Run `pnpm install` at the 
 pnpm dev              # Vite dev server for the frontend (127.0.0.1:1420)
 pnpm tauri:dev        # run the full Tauri desktop app (Rust + webview)
 pnpm build            # frontend build for Tauri → app/dist (runs tsc, then vite build)
-pnpm build:web        # Tauri-free web build; emits playground.html as index.html (Cloudflare)
-pnpm preview:web      # serve the build:web output
+pnpm build:playground # Tauri-free build; emits playground.html as index.html → app/dist (Cloudflare)
+pnpm preview:playground # serve the build:playground output
 pnpm test             # vitest (frontend unit tests)
 pnpm check:rust       # cargo check on the Tauri crate
 ```
@@ -35,11 +35,11 @@ navi-hook (Rust CLI, app/src-tauri/src/bin/navi_hook.rs)
 
 - **Pure logic is deliberately split out** for headless testing and a future backend World Model: `app/src/state.ts` (priority/labels/animation table, fully DOM/Tauri-free, covered by `state.test.ts`) and the Rust `agent-pets-core` crate (`app/src-tauri/core`, normalization/schema).
 - **`app/src/bridge.ts` is the only Tauri touch point** in the frontend (wraps `invoke`/`listen`/window drag). Outside Tauri it falls back to a browser mock, so the frontend can run without the desktop app.
-- **Frontend↔Tauri build coupling**: `app/src-tauri/tauri.conf.json` sets `frontendDist: ../dist` and `beforeBuildCommand: pnpm build`. Vite has two entries — `index.html` (Tauri shell → `main.ts`) and `playground.html` (browser sandbox → `playground.ts`). `--mode web` (`build:web`) rewrites the playground to `index.html` and is what `app/wrangler.jsonc` deploys.
+- **Frontend↔Tauri build coupling**: `app/src-tauri/tauri.conf.json` sets `frontendDist: ../dist` and `beforeBuildCommand: pnpm build`. Vite has two entries — `index.html` (Tauri shell → `main.ts`) and `playground.html` (browser sandbox → `playground.ts`). `--mode playground` (`build:playground`) rewrites the playground to `index.html`; the root `wrangler.jsonc` serves that output (`assets.directory: ./app/dist`) and is deployed from the repo root.
 - **Sprite rendering follows the codex-compatible atlas** (8×9, 192×208; `docs/codex-pet-spritesheets.md`). `app/src/pet/` (`navi-pet.ts` web component + `pet-core.ts`) is the "codex-pet" responsibility; the navi-specific UI (bubbles/badges/buttons) is separate. Planned split into `packages/ui` is recorded in @docs/frontend-packaging.md (not yet implemented).
 
 ## Project rules / gotchas
 
 - **Don't pre-implement the future vision.** The navi roadmap (Operator Core / Skills / Outbound) is aspirational; current safe scope is **Phase 1 only — non-breaking internal refactors** (`docs/navi-roadmap.md`). Confirm before structural changes.
 - **Product is named "navi"** but the repo/config stay `agent-pets`; rename is deferred (`issues/3d107c`).
-- **pnpm 11 quirk**: running `pnpm run <script>` from the repo root can fail a pre-run install check on esbuild's build-script approval. Web builds run on Cloudflare with root directory = `app` (where `app/pnpm-workspace.yaml` approves esbuild); locally, build with `pnpm --dir app exec vite build ...` if the root script trips.
+- **pnpm 11 build approval**: esbuild (a Vite dependency) needs a build-script approval, set via `allowBuilds: esbuild: true` in `pnpm-workspace.yaml`. This lets `pnpm install` / `pnpm run` work from the repo root (how Cloudflare runs `pnpm install && pnpm build:playground`). Don't remove it.
