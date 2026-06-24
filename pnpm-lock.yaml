@@ -32,6 +32,9 @@ importers:
 
   examples/playground:
     dependencies:
+      '@lobehub/icons-static-svg':
+        specifier: ^1.90.0
+        version: 1.91.0
       '@navi/ui':
         specifier: workspace:*
         version: link:../../packages/ui

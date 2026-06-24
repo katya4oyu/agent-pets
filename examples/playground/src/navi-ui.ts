@@ -87,8 +87,13 @@ export function isSpeechVisibleInAuto(highest: AgentState): boolean {
 
 // ── ソースバッジ（claude-code / codex / copilot） ──
 //
-// app では `@lobehub/icons-static-svg` の実ロゴを使うが、playground は依存を増やさず
-// currentColor で色付けする軽量グリフで代替する（色はチューニングで上書き可能）。
+// app/src/main.ts と同じ `@lobehub/icons-static-svg` の実ロゴを使う（出自・見た目を
+// 元実装に揃える）。各 SVG は `fill="currentColor"` なので、バッジ側の `color`
+// （= チューニング可能な --src-* 変数）で着色される。
+
+import claudeCodeSvg from "@lobehub/icons-static-svg/icons/claudecode.svg?raw";
+import codexSvg from "@lobehub/icons-static-svg/icons/codex.svg?raw";
+import copilotSvg from "@lobehub/icons-static-svg/icons/copilot.svg?raw";
 
 export interface SourceConfig {
   label: string;
@@ -98,24 +103,9 @@ export interface SourceConfig {
 }
 
 export const sourceConfig: Record<SourceId, SourceConfig> = {
-  "claude-code": {
-    label: "Claude Code",
-    color: "#CC785C",
-    // Anthropic のサンバースト風（4方向の星）。
-    svg: `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.2l1.9 6.4 6.4 1.9-6.4 1.9L12 18.8l-1.9-6.4L3.7 10.5l6.4-1.9z"/></svg>`,
-  },
-  codex: {
-    label: "Codex",
-    color: "#10A37F",
-    // コード由来の `< >` シェブロン。
-    svg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 7l-4.5 5L9 17M15 7l4.5 5L15 17"/></svg>`,
-  },
-  copilot: {
-    label: "Copilot",
-    color: "#6F42C1",
-    // ゴーグル（2つの目）風。
-    svg: `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 11.5c0-1.4 1.1-2.5 2.5-2.5h13c1.4 0 2.5 1.1 2.5 2.5v1c0 2.5-2 4.5-4.5 4.5-1.6 0-3-.8-3.8-2.1h-.4A4.5 4.5 0 0 1 8.5 17 4.5 4.5 0 0 1 3 12.5zm5.5.5a1.3 1.3 0 1 0 0 2.6 1.3 1.3 0 0 0 0-2.6m7 0a1.3 1.3 0 1 0 0 2.6 1.3 1.3 0 0 0 0-2.6"/></svg>`,
-  },
+  "claude-code": { label: "Claude Code", color: "#CC785C", svg: claudeCodeSvg },
+  codex: { label: "Codex", color: "#10A37F", svg: codexSvg },
+  copilot: { label: "Copilot", color: "#6F42C1", svg: copilotSvg },
 };
 
 // ── 吹き出し DOM（app/src/main.ts の createBubbleElement と同構造） ──
