@@ -2,14 +2,14 @@
 id: a7f3d2
 title: フロントエンドを packages/ui に切り出す（codex-pet はその内部に分離）
 type: chore
-status: todo
+status: in-progress
 priority: high
 ---
 
 フロント表示層を `app`（Tauri）から切り出し、playground と app が同じ部品を使う構造にする。
 背景・用語・決定の根拠は `docs/frontend-packaging.md` / `docs/concept.md` / `CLAUDE.md` を参照。
 
-**未着手。実装はオーナーの明示的なゴー待ち。**
+**パッケージ分割 + playground 独立アプリ化は実施済み。残りは navi 固有 UI の `@navi/ui` 抽出。**
 
 ## ゴール
 
@@ -19,14 +19,15 @@ priority: high
 - `app`（Tauri シェル）も `ui` を import。シェル配線（bridge / sessions / イベント / トレイ）は app に残す。
 - Cloudflare 公開対象を `app` から `examples/playground` へ移設（`build:web` / `wrangler.jsonc` を playground へ）。
 
-## 想定タスク（順序は要相談）
+## 進捗
 
-- [ ] pnpm workspace に `packages/*` / `examples/*` を追加。
-- [ ] `packages/ui` 作成、`app/src/pet/`（navi-pet, pet-core）を `ui/src/codex-pet/` へ移設。
-- [ ] navi 固有 UI（`main.ts` 内の吹き出し生成・バッジ・ボタン）を `ui` へ抽出。
-- [ ] `app` を `ui` 依存に差し替え（`tsc` / `vite build` / `vitest` 緑を維持。`frontendDist=../dist` を壊さない）。
-- [ ] `examples/playground` を独立アプリ化、`wrangler.jsonc` / `build:web` を移設。
-- [ ] CLAUDE.md / docs/frontend-packaging.md の「未確定・要確認」を解消（パッケージ名・要素名・資産配置・着手順）。
+- [x] pnpm workspace に `packages/*` / `examples/*` を追加。
+- [x] `packages/ui`（`@navi/ui`）作成、`app/src/pet/`（navi-pet, pet-core）を `ui/src/codex-pet/` へ移設。
+- [x] `examples/playground` を独立アプリ化（playground/gallery + mio 資産を移設、`@navi/ui` を import）。
+- [x] Cloudflare 公開対象を `examples/playground/dist` へ（root `wrangler.jsonc` / `build:playground`）。
+- [x] 既定の確定: パッケージ名 `@navi/ui`、要素名 `<navi-pet>` 維持、mio は playground にコピー。
+- [ ] **navi 固有 UI（`main.ts` 内の吹き出し生成・バッジ・ボタン）を `@navi/ui` へ抽出。** ← playground のデザインループで形を詰めてから。
+- [ ] （その後）`app` シェルを codex-pet/`@navi/ui` 利用へ移行（現状はシェル独自 canvas 描画。redesign spec のフェーズ2 相当）。
 
 ## 注意
 

@@ -30,6 +30,25 @@ importers:
         specifier: ^4.1.9
         version: 4.1.9(vite@8.1.0)
 
+  examples/playground:
+    dependencies:
+      '@navi/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+    devDependencies:
+      typescript:
+        specifier: ^5.4.0
+        version: 5.9.3
+      vite:
+        specifier: ^8.1.0
+        version: 8.1.0
+
+  packages/ui:
+    devDependencies:
+      typescript:
+        specifier: ^5.4.0
+        version: 5.9.3
+
 packages:
 
   '@emnapi/core@1.11.1':

@@ -4,17 +4,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 See @README.md for overview, @docs/concept.md for project concept and **important terminology** (read it — past sessions lost time confusing "codex 本家" with `codex-pet-web`).
 
+## Layout
+
+pnpm workspace (`app`, `packages/*`, `examples/*`). Run `pnpm install` at the root first.
+
+- `app/` — the Tauri desktop app (frontend `app/src` + Rust `app/src-tauri`).
+- `packages/ui` (`@navi/ui`) — navi presentation layer. `src/codex-pet/` is the codex-compatible sprite renderer; navi-specific UI will live alongside it.
+- `examples/playground` — standalone browser sandbox (imports `@navi/ui`) for tuning the pet + UI design. Cloudflare deploy target.
+
 ## Commands
 
-pnpm workspace; all frontend code lives under `app/`. Run `pnpm install` at the root first.
-
 ```sh
-pnpm dev              # Vite dev server for the frontend (127.0.0.1:1420)
+pnpm dev              # Vite dev server for the Tauri frontend (127.0.0.1:1420)
 pnpm tauri:dev        # run the full Tauri desktop app (Rust + webview)
-pnpm build            # frontend build for Tauri → app/dist (runs tsc, then vite build)
-pnpm build:playground # Tauri-free build; emits playground.html as index.html → app/dist (Cloudflare)
-pnpm preview:playground # serve the build:playground output
-pnpm test             # vitest (frontend unit tests)
+pnpm build            # Tauri frontend build → app/dist (runs tsc, then vite build)
+pnpm build:playground # build examples/playground → its dist (Cloudflare; index.html = playground)
+pnpm preview:playground # serve the playground build
+pnpm test             # vitest (app unit tests)
 pnpm check:rust       # cargo check on the Tauri crate
 ```
 
@@ -35,11 +41,11 @@ navi-hook (Rust CLI, app/src-tauri/src/bin/navi_hook.rs)
 
 - **Pure logic is deliberately split out** for headless testing and a future backend World Model: `app/src/state.ts` (priority/labels/animation table, fully DOM/Tauri-free, covered by `state.test.ts`) and the Rust `agent-pets-core` crate (`app/src-tauri/core`, normalization/schema).
 - **`app/src/bridge.ts` is the only Tauri touch point** in the frontend (wraps `invoke`/`listen`/window drag). Outside Tauri it falls back to a browser mock, so the frontend can run without the desktop app.
-- **Frontend↔Tauri build coupling**: `app/src-tauri/tauri.conf.json` sets `frontendDist: ../dist` and `beforeBuildCommand: pnpm build`. Vite has two entries — `index.html` (Tauri shell → `main.ts`) and `playground.html` (browser sandbox → `playground.ts`). `--mode playground` (`build:playground`) rewrites the playground to `index.html`; the root `wrangler.jsonc` serves that output (`assets.directory: ./app/dist`) and is deployed from the repo root.
-- **Sprite rendering follows the codex-compatible atlas** (8×9, 192×208; `docs/codex-pet-spritesheets.md`). `app/src/pet/` (`navi-pet.ts` web component + `pet-core.ts`) is the "codex-pet" responsibility; the navi-specific UI (bubbles/badges/buttons) is separate. Planned split into `packages/ui` is recorded in @docs/frontend-packaging.md (not yet implemented).
+- **Frontend↔Tauri build coupling**: `app/src-tauri/tauri.conf.json` sets `frontendDist: ../dist` and `beforeBuildCommand: pnpm build`; `app` is a single Vite entry (`index.html` → `main.ts`). The browser sandbox is a separate app (`examples/playground`, its own `index.html`); the root `wrangler.jsonc` serves `./examples/playground/dist` and deploys from the repo root.
+- **Sprite rendering follows the codex-compatible atlas** (8×9, 192×208; `docs/codex-pet-spritesheets.md`). The `<navi-pet>` web component + `pet-core` live in `packages/ui/src/codex-pet/` (used by the playground). Note `app/src/main.ts` does **not** use them yet — the Tauri shell still renders sprites on its own `<canvas>`. The navi-specific UI extraction into `@navi/ui` is still pending (`@docs/frontend-packaging.md`, `issues/a7f3d2`).
 
 ## Project rules / gotchas
 
 - **Don't pre-implement the future vision.** The navi roadmap (Operator Core / Skills / Outbound) is aspirational; current safe scope is **Phase 1 only — non-breaking internal refactors** (`docs/navi-roadmap.md`). Confirm before structural changes.
 - **Product is named "navi"** but the repo/config stay `agent-pets`; rename is deferred (`issues/3d107c`).
-- **Vite 8 / Node floor**: the frontend uses Vite 8 (Vitest 4), which bundles with **Rolldown, not esbuild** — Rolldown forbids mutating the `generateBundle` `bundle` object, so the playground→index.html step renames on disk in `writeBundle` (see `app/vite.config.ts`). Vite 8 needs Node `>=22.12` (or `>=20.19`).
+- **Vite 8 / Node floor**: builds use Vite 8 (Vitest 4), which bundles with **Rolldown, not esbuild** (Rolldown forbids mutating the `generateBundle` `bundle` object — rename output files in `writeBundle` instead). Vite 8 needs Node `>=22.12` (or `>=20.19`).

@@ -1,4 +1,4 @@
-import "./pet/navi-pet";
+import "@navi/ui";
 
 // 各 AgentState がどのアニメ（行）に対応するかを一覧で検証するための使い捨てページ。
 const stateToAnimation: Record<string, string> = {

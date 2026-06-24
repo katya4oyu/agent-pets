@@ -3,7 +3,7 @@
   // Worker code and no Tauri/Rust involved. Deployed from the repo root (this
   // is a pnpm workspace); paths below are relative to this file.
   //
-  // Build first:    pnpm install && pnpm build:playground   (outputs app/dist, index.html = playground)
+  // Build first:    pnpm install && pnpm build:playground   (builds examples/playground → its dist, index.html = playground)
   // Deploy (prod):  npx wrangler deploy
   // Preview branch: npx wrangler versions upload
   //
@@ -12,9 +12,7 @@
   "name": "agent-pets",
   "compatibility_date": "2025-01-01",
   "assets": {
-    // Playground build output. Update to ./examples/playground/dist once the
-    // frontend is split out (see docs/frontend-packaging.md).
-    "directory": "./app/dist",
+    "directory": "./examples/playground/dist",
     // The playground is a single page; serve index.html for unknown paths.
     "not_found_handling": "single-page-application"
   }

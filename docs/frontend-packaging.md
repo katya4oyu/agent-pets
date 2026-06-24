@@ -1,7 +1,8 @@
 # フロントエンドのパッケージ分割（決定記録）
 
 - 日付: 2026-06-24
-- ステータス: **合意済み・未実装（実装はオーナーのゴー待ち）**
+- ステータス: **実施済み（パッケージ分割 + playground 独立アプリ化）。navi 固有 UI の `@navi/ui` 抽出は継続課題。**
+  - 実体: `packages/ui`（`@navi/ui`、内部 `src/codex-pet/`）、`examples/playground`（独立アプリ・Cloudflare 公開対象）。`app` は codex-pet 未使用のため `@navi/ui` 未依存（シェルは独自 canvas 描画のまま）。
 - 位置づけ: `docs/superpowers/specs/2026-06-24-navi-ui-redesign-design.md`（フロント刷新・playground・Cloudflare）の続き。同 spec は変更を `app/` 内に留めたが、本書は**フロントの再利用部分をパッケージ／独立アプリへ物理分割**する方針を確定する。
 
 ## 背景・動機
