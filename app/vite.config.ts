@@ -1,22 +1,21 @@
 import { defineConfig, type Plugin } from "vite";
 import { fileURLToPath } from "node:url";
+import { rename } from "node:fs/promises";
+import { join } from "node:path";
 
 const htmlEntry = (file: string) => fileURLToPath(new URL(`./${file}`, import.meta.url));
 
 // 公開（Cloudflare）ビルド `--mode playground` では playground.html を
 // `/`（index.html）として出力する。Vite は HTML エントリの出力名を元ファイル名から
-// 決めるため、バンドル後に playground.html を index.html へ差し替えるプラグインで対応。
+// 決めるため、書き出し後に dist 内で playground.html を index.html へリネームする。
+// （bundle オブジェクトの書き換えは Rolldown=Vite8 で禁止されているため writeBundle で実施。）
 function playgroundAsIndex(): Plugin {
   return {
     name: "navi-playground-as-index",
     enforce: "post",
-    generateBundle(_options, bundle) {
-      const entry = bundle["playground.html"];
-      if (entry) {
-        delete bundle["playground.html"];
-        entry.fileName = "index.html";
-        bundle["index.html"] = entry;
-      }
+    async writeBundle(options) {
+      const dir = options.dir ?? "dist";
+      await rename(join(dir, "playground.html"), join(dir, "index.html"));
     },
   };
 }

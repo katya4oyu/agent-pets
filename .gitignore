@@ -8,3 +8,6 @@ target/
 .wrangler/
 tmp/
 assets/
+
+# nested lockfile occasionally emitted by pnpm; only the root one is canonical
+/app/pnpm-lock.yaml

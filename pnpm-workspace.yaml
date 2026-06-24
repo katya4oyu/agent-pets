@@ -1,9 +1,2 @@
 packages:
   - 'app'
-# pnpm 11 build-script approval. Required so `pnpm install` / `pnpm run` from the
-# repo root (e.g. Cloudflare's `pnpm install && pnpm build:playground`) can build
-# esbuild without an interactive prompt.
-onlyBuiltDependencies:
-  - esbuild
-allowBuilds:
-  esbuild: true

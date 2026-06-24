@@ -42,4 +42,4 @@ navi-hook (Rust CLI, app/src-tauri/src/bin/navi_hook.rs)
 
 - **Don't pre-implement the future vision.** The navi roadmap (Operator Core / Skills / Outbound) is aspirational; current safe scope is **Phase 1 only — non-breaking internal refactors** (`docs/navi-roadmap.md`). Confirm before structural changes.
 - **Product is named "navi"** but the repo/config stay `agent-pets`; rename is deferred (`issues/3d107c`).
-- **pnpm 11 build approval**: esbuild (a Vite dependency) needs a build-script approval, set via `allowBuilds: esbuild: true` in `pnpm-workspace.yaml`. This lets `pnpm install` / `pnpm run` work from the repo root (how Cloudflare runs `pnpm install && pnpm build:playground`). Don't remove it.
+- **Vite 8 / Node floor**: the frontend uses Vite 8 (Vitest 4), which bundles with **Rolldown, not esbuild** — Rolldown forbids mutating the `generateBundle` `bundle` object, so the playground→index.html step renames on disk in `writeBundle` (see `app/vite.config.ts`). Vite 8 needs Node `>=22.12` (or `>=20.19`).

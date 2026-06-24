@@ -32,8 +32,8 @@
    - リポジトリルートはルートのまま（pnpm workspace）。ルートに `build:playground` スクリプトを置き、ルート `wrangler.jsonc` の `assets.directory` で dist の場所だけを指す。
    - Cloudflare Workers Builds 設定: Root directory = リポジトリルート、Build command = `pnpm install && pnpm build:playground`、Deploy = `npx wrangler deploy`（preview branch は `npx wrangler versions upload`）。
    - dist の場所は現状 `./app/dist`。playground 分割後に `./examples/playground/dist` へ更新するだけ（root 構成は不変）。
-   - ルートからビルドするため、ルート `pnpm-workspace.yaml` で esbuild（Vite 依存）のビルドを承認する（pnpm 11 の `allowBuilds: esbuild: true`）。
    - ※ 既に現状構成（playground 分割前）に適用済み: `build:web`→`build:playground` リネーム、`app/wrangler.jsonc`→ルート `wrangler.jsonc`（`./app/dist` 指定）。
+   - 注: Vite 8（Rolldown）採用後は esbuild 依存が無くなり、pnpm のビルド承認（旧 `allowBuilds: esbuild`）は不要になった。ルートからの `pnpm install && pnpm build:playground` はそのまま通る。
 
 ## 想定構造（到達イメージ）
 
