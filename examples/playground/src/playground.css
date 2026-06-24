@@ -80,7 +80,12 @@ button {
   display: flex;
   flex-direction: column;
   gap: var(--bubble-gap);
-  max-height: calc(var(--bubble-max-visible) * 112px);
+  /* 最大表示件数で頭打ちにしつつ、ステージの空き高さも超えない（超過分はステージ上端で
+     切れずに内部スクロールへ）。100% = navi-shell の高さ = ステージ高。 */
+  max-height: min(
+    calc(var(--bubble-max-visible) * 112px),
+    calc(100% - var(--stage-pad) - var(--pet-h) - var(--bubble-offset-y) - 10px)
+  );
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: rgba(29, 36, 51, 0.18) transparent;
@@ -334,7 +339,7 @@ button {
 .pg-anim-badge {
   position: absolute;
   left: 12px;
-  top: 12px;
+  bottom: 12px;
   padding: 4px 8px;
   border-radius: 6px;
   background: rgba(16, 19, 28, 0.7);
@@ -656,8 +661,8 @@ button {
     position: sticky;
     top: 0;
     z-index: 10;
-    height: 44vh;
-    min-height: 220px;
+    height: 52vh;
+    min-height: 300px;
     border-bottom: 1px solid var(--line);
   }
 
