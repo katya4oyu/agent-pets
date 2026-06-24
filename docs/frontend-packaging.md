@@ -66,7 +66,8 @@ agent-pets/
 
 ## 関連
 
-- `CLAUDE.md` — 作業規範・用語の取り違え注意。
+- `CLAUDE.md` — 運用ルール（コマンド・規約・落とし穴）。
+- `docs/concept.md` — プロジェクト概念・用語の取り違え注意。
 - `docs/superpowers/specs/2026-06-24-navi-ui-redesign-design.md` — 直前のフロント刷新設計。
 - `docs/navi-architecture.md` §10 Avatar 層 / §12 ディレクトリ。
 - `issues/`（本決定の実行 TODO）。

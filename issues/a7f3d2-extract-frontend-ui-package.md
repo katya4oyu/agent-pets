@@ -7,7 +7,7 @@ priority: high
 ---
 
 フロント表示層を `app`（Tauri）から切り出し、playground と app が同じ部品を使う構造にする。
-背景・用語・決定の根拠は `docs/frontend-packaging.md` と `CLAUDE.md` を参照。
+背景・用語・決定の根拠は `docs/frontend-packaging.md` / `docs/concept.md` / `CLAUDE.md` を参照。
 
 **未着手。実装はオーナーの明示的なゴー待ち。**
 
