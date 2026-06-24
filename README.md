@@ -40,31 +40,39 @@ Floating pet + speech bubble
 - Vite + TypeScript frontend — pet overlay UI.
 - `navi-hook` CLI — installed to `~/.navi/bin/navi-hook`, piped from agent hooks.
 
-## Frontend without Tauri (web preview / Cloudflare)
+## Workspace layout
 
-The Vite frontend in `app/` runs standalone — no Rust build required — so the
-look and feel can be verified in a plain browser or shared on Cloudflare.
+pnpm workspace (`app`, `packages/*`, `examples/*`):
 
-- All Tauri touch points (`invoke` / `listen` / window dragging) are funnelled
-  through `app/src/bridge.ts`. Inside the desktop app it forwards to
-  `@tauri-apps/api`; in a plain browser it falls back to a self-contained mock,
-  so the frontend never hard-depends on Tauri.
-- `pnpm run build:web` produces a Tauri-free bundle in `app/dist/`, with the
-  `playground` page emitted as `index.html`. `pnpm run preview:web` serves it.
+- `app/` — the Tauri desktop app (frontend `app/src` + Rust `app/src-tauri`).
+- `packages/ui` (`@navi/ui`) — navi presentation layer. `src/codex-pet/` is the
+  codex-compatible sprite renderer (`<navi-pet>` web component + `pet-core`).
+- `examples/playground` — a standalone browser app (no Tauri) for tuning the
+  pet + UI design; the Cloudflare deploy target.
+
+## Design preview without Tauri (Cloudflare)
+
+`examples/playground` runs the pet UI in a plain browser — no Rust build — so the
+look and feel can be verified or shared without the desktop app.
+
+- `pnpm run build:playground` builds `examples/playground` to its `dist/`
+  (`index.html` = playground). `pnpm run preview:playground` serves it.
+- The Tauri app's own Tauri touch points (`invoke` / `listen` / window dragging)
+  are funnelled through `app/src/bridge.ts`, which falls back to a browser mock
+  outside Tauri.
 
 ### Deploy to Cloudflare (Workers Static Assets)
 
-`app/wrangler.jsonc` serves `app/dist` with no Worker code. From the Cloudflare
-dashboard (Workers Builds):
+The repo-root `wrangler.jsonc` serves `./examples/playground/dist` with no Worker
+code. From the Cloudflare dashboard (Workers Builds):
 
-- **Root directory:** `app`
-- **Build command:** `pnpm install && pnpm run build:web`
+- **Root directory:** repository root
+- **Build command:** `pnpm install && pnpm run build:playground`
 - **Deploy command:** `npx wrangler deploy` (production) /
   `npx wrangler versions upload` (preview branches)
 
-No Tauri, Rust, or cargo is built for the web target. See
-`docs/superpowers/specs/2026-06-24-navi-ui-redesign-design.md` for the full
-design.
+No Tauri, Rust, or cargo is built for the web target. See `docs/concept.md` and
+`docs/frontend-packaging.md` for the package split.
 
 ## Repository
 
