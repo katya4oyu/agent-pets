@@ -408,7 +408,7 @@ button {
 }
 
 .pg-row-slider {
-  grid-template-columns: 1fr 120px 44px;
+  grid-template-columns: 1fr 96px 52px;
 }
 
 .pg-row-slider input[type="range"] {
@@ -419,6 +419,7 @@ button {
   text-align: right;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .pg-row-toggle,
@@ -635,4 +636,73 @@ button {
 
 .pg-readout-body code {
   white-space: pre;
+}
+
+/* ═══════════════════════════ Mobile / narrow (縦積み) ═══════════════════════════ */
+/*
+ * 横2カラムだとモバイルでプレビュー（pet × navi UI）が潰れて「何を調整しているか」
+ * 見えない。狭幅では縦積みにし、ステージを上部に sticky 固定したライブプレビューにする
+ * → 下のコントロールをスクロールしながら、上で結果を確認できる。
+ */
+@media (max-width: 860px) {
+  body {
+    grid-template-columns: 1fr;
+    height: auto;
+    min-height: 100vh;
+    overflow: visible;
+  }
+
+  .pg-stage {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    height: 44vh;
+    min-height: 220px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .pg-panel {
+    border-left: 0;
+    overflow: visible;
+  }
+
+  /* モバイルでは sticky をやめ、末尾に普通に並べる（プレビューを隠さない） */
+  .pg-readout {
+    position: static;
+  }
+
+  /* 親指操作向けにヒット領域を少し広げる */
+  .pg-add,
+  .pg-seg button {
+    padding-block: 8px;
+  }
+
+  .pg-session select,
+  .pg-session input {
+    padding-block: 7px;
+  }
+}
+
+/* さらに狭い端末: スライダー行が窮屈なので値表示を下段へ送る */
+@media (max-width: 480px) {
+  .pg-row-slider {
+    grid-template-columns: 1fr 52px;
+    grid-template-areas:
+      "label value"
+      "range range";
+    column-gap: 8px;
+    row-gap: 4px;
+  }
+
+  .pg-row-slider .pg-label {
+    grid-area: label;
+  }
+
+  .pg-row-slider output {
+    grid-area: value;
+  }
+
+  .pg-row-slider input[type="range"] {
+    grid-area: range;
+  }
 }
