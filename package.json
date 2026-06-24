@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "pnpm --dir app dev",
     "build": "pnpm --dir app build",
+    "build:web": "pnpm --dir app build:web",
     "preview": "pnpm --dir app preview",
+    "preview:web": "pnpm --dir app preview:web",
     "tauri": "pnpm --dir app tauri",
     "tauri:dev": "pnpm --dir app tauri dev",
     "test": "pnpm --dir app test",

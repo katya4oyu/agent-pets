@@ -1,0 +1,15 @@
+{
+  // Cloudflare Workers Static Assets — serves the Vite "web" build (the navi
+  // playground) with no Worker code and no Tauri/Rust involved.
+  //
+  // Build first with:  pnpm run build:web   (outputs ./dist, index.html = playground)
+  // Deploy (prod):     npx wrangler deploy
+  // Preview (branch):  npx wrangler versions upload
+  "name": "agent-pets",
+  "compatibility_date": "2025-01-01",
+  "assets": {
+    "directory": "./dist",
+    // The playground is a single page; serve index.html for unknown paths.
+    "not_found_handling": "single-page-application"
+  }
+}
