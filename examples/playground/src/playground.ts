@@ -1,16 +1,100 @@
 import "@navi/ui";
 import "./playground.css";
+import {
+  type AgentState,
+  type SourceId,
+  type SessionData,
+  agentStates,
+  sourceConfig,
+  stateLabels,
+  highestPriorityState,
+  isSpeechVisibleInAuto,
+  createBubble,
+  updateBubble,
+} from "./navi-ui";
 
-type AgentState = "done" | "thinking" | "running" | "editing" | "waiting_approval" | "error";
+// ─────────────────────────────────────────────────────────────────────────────
+// playground = pet アバター × navi 固有 UI の統合デザインをチューニングするサンドボックス
+// （issue d9a2f7）。スライダー等でパラメータを露出 → オーナーが良い値を読み取って指示
+// → エージェントがコンポーネント既定値 / シェルへ焼き込む。
+// ─────────────────────────────────────────────────────────────────────────────
 
-const states: AgentState[] = [
-  "done",
-  "thinking",
-  "running",
-  "editing",
-  "waiting_approval",
-  "error",
-];
+type SpeechMode = "show" | "hide" | "auto";
+
+interface Params {
+  petSize: number;
+  bubbleWidth: number;
+  bubblePadX: number;
+  bubblePadY: number;
+  bubbleRadius: number;
+  bubbleGap: number;
+  bubbleOffsetX: number;
+  bubbleOffsetY: number;
+  shadowY: number;
+  shadowBlur: number;
+  shadowAlpha: number;
+  maxVisible: number;
+  tail: boolean;
+  fps: number; // 0 = pet.json 既定
+  speechMode: SpeechMode;
+  colors: Record<SourceId, string>;
+}
+
+const params: Params = {
+  petSize: 128,
+  bubbleWidth: 266,
+  bubblePadX: 10,
+  bubblePadY: 9,
+  bubbleRadius: 12,
+  bubbleGap: 6,
+  bubbleOffsetX: 8,
+  bubbleOffsetY: 8,
+  shadowY: 8,
+  shadowBlur: 22,
+  shadowAlpha: 0.18,
+  maxVisible: 3,
+  tail: true,
+  fps: 0,
+  speechMode: "show",
+  colors: {
+    "claude-code": sourceConfig["claude-code"].color,
+    codex: sourceConfig.codex.color,
+    copilot: sourceConfig.copilot.color,
+  },
+};
+
+// ── session 状態 ──
+
+let seq = 0;
+const sessions = new Map<string, SessionData>();
+const bubbles = new Map<string, HTMLElement>();
+
+const sampleMessages: Record<SourceId, string> = {
+  "claude-code": "Editing src/state.ts — adding the priority table",
+  codex: "Waiting for approval to run `cargo test`",
+  copilot: "Generating completions for navi-pet.ts",
+};
+
+function nextId(source: SourceId): string {
+  seq += 1;
+  return `${source}:${seq}`;
+}
+
+function makeSession(source: SourceId, state: AgentState): SessionData {
+  return {
+    id: nextId(source),
+    source,
+    state,
+    label: `${sourceConfig[source].label} #${seq}`,
+    message: sampleMessages[source],
+    project: "agent-pets",
+    cwd: "/home/user/agent-pets",
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DOM 構築
+// ─────────────────────────────────────────────────────────────────────────────
 
 const root = document.querySelector<HTMLElement>("#playground");
 if (!root) {
@@ -19,68 +103,577 @@ if (!root) {
 
 root.innerHTML = `
   <div class="pg-stage">
-    <navi-pet embedded pet="/pets/mio/pet.json" state="done"></navi-pet>
+    <div class="navi-shell" aria-label="navi status">
+      <div class="navi-bubbles"></div>
+      <div class="navi-pet-wrap">
+        <button class="bubble-toggle" type="button" aria-label="Hide speech bubbles" aria-pressed="true">
+          <span class="toggle-chevron" aria-hidden="true"></span>
+          <span class="session-count" aria-label="0 active agent sessions">0</span>
+        </button>
+        <navi-pet embedded pet="/pets/mio/pet.json" state="done"></navi-pet>
+      </div>
+    </div>
   </div>
   <aside class="pg-panel">
-    <h1>navi playground</h1>
-    <p class="pg-sub">Tauri 不要・ブラウザだけで見た目を確認</p>
-
-    <h2>Agent state</h2>
-    <div class="pg-states"></div>
-
-    <h2>Pet size</h2>
-    <input type="range" min="64" max="256" value="160" id="pg-size" />
-
-    <p class="pg-current">
-      state: <code id="pg-state-label">done</code><br />
-      anim: <code id="pg-anim-label">–</code>
-    </p>
-
-    <p class="pg-hint">
-      ペットはドラッグで移動、右下でリサイズできます。<br />
-      次の段階で吹き出し（マルチセッション）をここに重ねます。
-    </p>
+    <header class="pg-head">
+      <h1>navi playground</h1>
+      <p class="pg-sub">pet × navi UI 統合デザインのチューニング（Tauri 不要）</p>
+    </header>
+    <div class="pg-controls"></div>
+    <section class="pg-readout">
+      <div class="pg-readout-head">
+        <h2>Current values</h2>
+        <button type="button" class="pg-copy">Copy CSS</button>
+      </div>
+      <pre class="pg-readout-body"><code></code></pre>
+    </section>
   </aside>
 `;
 
-const pet = root.querySelector<HTMLElement>("navi-pet");
-const statesEl = root.querySelector<HTMLElement>(".pg-states");
-const stateLabel = root.querySelector<HTMLElement>("#pg-state-label");
-const animLabel = root.querySelector<HTMLElement>("#pg-anim-label");
-const sizeInput = root.querySelector<HTMLInputElement>("#pg-size");
+const stage = root.querySelector<HTMLElement>(".pg-stage")!;
+const shell = root.querySelector<HTMLElement>(".navi-shell")!;
+const bubblesEl = root.querySelector<HTMLElement>(".navi-bubbles")!;
+const pet = root.querySelector<HTMLElement>("navi-pet")!;
+const toggleBtn = root.querySelector<HTMLButtonElement>(".bubble-toggle")!;
+const sessionCountEl = root.querySelector<HTMLElement>(".session-count")!;
+const controlsEl = root.querySelector<HTMLElement>(".pg-controls")!;
+const readoutCode = root.querySelector<HTMLElement>(".pg-readout-body code")!;
+const copyBtn = root.querySelector<HTMLButtonElement>(".pg-copy")!;
 
-if (!pet || !statesEl || !stateLabel || !animLabel || !sizeInput) {
-  throw new Error("playground: failed to build controls");
+// ─────────────────────────────────────────────────────────────────────────────
+// コントロール用の小さなビルダー群
+// ─────────────────────────────────────────────────────────────────────────────
+
+function group(title: string): HTMLElement {
+  const section = document.createElement("section");
+  section.className = "pg-group";
+  section.innerHTML = `<h2>${title}</h2><div class="pg-group-body"></div>`;
+  controlsEl.appendChild(section);
+  return section.querySelector<HTMLElement>(".pg-group-body")!;
 }
 
-pet.style.setProperty("--navi-pet-size", "160px");
+interface SliderOpts {
+  label: string;
+  min: number;
+  max: number;
+  step?: number;
+  value: number;
+  unit?: string;
+  onInput: (v: number) => void;
+}
 
-const buttons = new Map<AgentState, HTMLButtonElement>();
+function slider(parent: HTMLElement, o: SliderOpts): void {
+  const row = document.createElement("label");
+  row.className = "pg-row pg-row-slider";
+  row.innerHTML = `
+    <span class="pg-label">${o.label}</span>
+    <input type="range" min="${o.min}" max="${o.max}" step="${o.step ?? 1}" value="${o.value}" />
+    <output>${o.value}${o.unit ?? ""}</output>
+  `;
+  const input = row.querySelector<HTMLInputElement>("input")!;
+  const out = row.querySelector<HTMLOutputElement>("output")!;
+  input.addEventListener("input", () => {
+    const v = Number(input.value);
+    out.textContent = `${v}${o.unit ?? ""}`;
+    o.onInput(v);
+  });
+  parent.appendChild(row);
+}
 
-function selectState(next: AgentState) {
-  pet!.setAttribute("state", next);
-  stateLabel!.textContent = next;
-  for (const [key, btn] of buttons) {
-    btn.setAttribute("aria-pressed", String(key === next));
+function toggle(
+  parent: HTMLElement,
+  label: string,
+  value: boolean,
+  onChange: (v: boolean) => void,
+): void {
+  const row = document.createElement("label");
+  row.className = "pg-row pg-row-toggle";
+  row.innerHTML = `<span class="pg-label">${label}</span><input type="checkbox" ${value ? "checked" : ""} />`;
+  const input = row.querySelector<HTMLInputElement>("input")!;
+  input.addEventListener("change", () => onChange(input.checked));
+  parent.appendChild(row);
+}
+
+function color(
+  parent: HTMLElement,
+  label: string,
+  value: string,
+  onInput: (v: string) => void,
+): void {
+  const row = document.createElement("label");
+  row.className = "pg-row pg-row-color";
+  row.innerHTML = `<span class="pg-label">${label}</span><input type="color" value="${value}" /><code>${value}</code>`;
+  const input = row.querySelector<HTMLInputElement>("input")!;
+  const code = row.querySelector<HTMLElement>("code")!;
+  input.addEventListener("input", () => {
+    code.textContent = input.value;
+    onInput(input.value);
+  });
+  parent.appendChild(row);
+}
+
+function segmented<T extends string>(
+  parent: HTMLElement,
+  label: string,
+  options: T[],
+  value: T,
+  onPick: (v: T) => void,
+): { set: (v: T) => void } {
+  const row = document.createElement("div");
+  row.className = "pg-row pg-row-segmented";
+  row.innerHTML = `<span class="pg-label">${label}</span><div class="pg-seg"></div>`;
+  const seg = row.querySelector<HTMLElement>(".pg-seg")!;
+  const btns = new Map<T, HTMLButtonElement>();
+  const set = (v: T) => {
+    for (const [k, b] of btns) b.setAttribute("aria-pressed", String(k === v));
+  };
+  for (const opt of options) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = opt;
+    b.addEventListener("click", () => {
+      set(opt);
+      onPick(opt);
+    });
+    btns.set(opt, b);
+    seg.appendChild(b);
+  }
+  set(value);
+  parent.appendChild(row);
+  return { set };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 反映：params → CSS 変数 / pet / 吹き出し可視性 / readout
+// ─────────────────────────────────────────────────────────────────────────────
+
+function getHighestState(): AgentState {
+  return highestPriorityState(Array.from(sessions.values(), (s) => s.state));
+}
+
+function speechVisible(): boolean {
+  if (params.speechMode === "show") return true;
+  if (params.speechMode === "hide") return false;
+  return isSpeechVisibleInAuto(getHighestState());
+}
+
+function apply(): void {
+  const s = shell.style;
+  s.setProperty("--pet-size", `${params.petSize}px`);
+  pet.style.setProperty("--navi-pet-size", `${params.petSize}px`);
+  s.setProperty("--bubble-width", `${params.bubbleWidth}px`);
+  s.setProperty("--bubble-pad-x", `${params.bubblePadX}px`);
+  s.setProperty("--bubble-pad-y", `${params.bubblePadY}px`);
+  s.setProperty("--bubble-radius", `${params.bubbleRadius}px`);
+  s.setProperty("--bubble-gap", `${params.bubbleGap}px`);
+  s.setProperty("--bubble-offset-x", `${params.bubbleOffsetX}px`);
+  s.setProperty("--bubble-offset-y", `${params.bubbleOffsetY}px`);
+  s.setProperty("--bubble-shadow-y", `${params.shadowY}px`);
+  s.setProperty("--bubble-shadow-blur", `${params.shadowBlur}px`);
+  s.setProperty("--bubble-shadow-alpha", String(params.shadowAlpha));
+  s.setProperty("--bubble-max-visible", String(params.maxVisible));
+  s.setProperty("--src-claude-code", params.colors["claude-code"]);
+  s.setProperty("--src-codex", params.colors.codex);
+  s.setProperty("--src-copilot", params.colors.copilot);
+
+  shell.classList.toggle("has-tail", params.tail);
+
+  if (params.fps > 0) pet.setAttribute("fps", String(params.fps));
+  else pet.removeAttribute("fps");
+
+  pet.setAttribute("state", getHighestState());
+
+  const visible = speechVisible();
+  shell.classList.toggle("speech-hidden", !visible);
+  toggleBtn.setAttribute("aria-pressed", String(visible));
+  toggleBtn.setAttribute(
+    "aria-label",
+    visible ? "Hide speech bubbles" : "Show speech bubbles",
+  );
+
+  const count = sessions.size;
+  sessionCountEl.textContent = String(count);
+  sessionCountEl.setAttribute(
+    "aria-label",
+    `${count} active agent session${count !== 1 ? "s" : ""}`,
+  );
+
+  refreshReadout();
+}
+
+function refreshReadout(): void {
+  const lines = [
+    "/* navi UI — tuned in playground */",
+    ".pet-shell {",
+    `  --pet-size: ${params.petSize}px;`,
+    `  --bubble-width: ${params.bubbleWidth}px;`,
+    `  --bubble-pad: ${params.bubblePadY}px ${params.bubblePadX}px;`,
+    `  --bubble-radius: ${params.bubbleRadius}px;`,
+    `  --bubble-gap: ${params.bubbleGap}px;`,
+    `  --bubble-offset-x: ${params.bubbleOffsetX}px;`,
+    `  --bubble-offset-y: ${params.bubbleOffsetY}px;`,
+    `  --bubble-shadow: 0 ${params.shadowY}px ${params.shadowBlur}px rgba(16, 19, 28, ${params.shadowAlpha});`,
+    `  --bubble-max-visible: ${params.maxVisible};`,
+    `  --bubble-tail: ${params.tail ? "on" : "off"};`,
+    `  --src-claude-code: ${params.colors["claude-code"]};`,
+    `  --src-codex: ${params.colors.codex};`,
+    `  --src-copilot: ${params.colors.copilot};`,
+    "}",
+    "",
+    `/* pet fps: ${params.fps > 0 ? params.fps : "pet.json default"} · speech-mode: ${params.speechMode} */`,
+  ];
+  readoutCode.textContent = lines.join("\n");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 吹き出しスタック ↔ session の同期
+// ─────────────────────────────────────────────────────────────────────────────
+
+let editorBody: HTMLElement | null = null;
+
+function renderBubbles(): void {
+  // 既存セッション分を upsert
+  for (const session of sessions.values()) {
+    let el = bubbles.get(session.id);
+    if (!el) {
+      el = createBubble(session, { onClose: removeSession });
+      bubbles.set(session.id, el);
+      bubblesEl.appendChild(el);
+    } else {
+      updateBubble(el, session);
+    }
+  }
+  // 消えたセッションの bubble を除去
+  for (const [id, el] of bubbles) {
+    if (!sessions.has(id)) {
+      el.remove();
+      bubbles.delete(id);
+    }
   }
 }
 
-for (const state of states) {
-  const btn = document.createElement("button");
-  btn.type = "button";
-  btn.textContent = state;
-  btn.setAttribute("aria-pressed", String(state === "done"));
-  btn.addEventListener("click", () => selectState(state));
-  buttons.set(state, btn);
-  statesEl.appendChild(btn);
+function renderEditors(): void {
+  if (!editorBody) return;
+  editorBody.replaceChildren();
+
+  if (sessions.size === 0) {
+    const empty = document.createElement("p");
+    empty.className = "pg-empty";
+    empty.textContent = "No sessions. Add one to see the bubble stack.";
+    editorBody.appendChild(empty);
+    return;
+  }
+
+  for (const session of sessions.values()) {
+    editorBody.appendChild(editorRow(session));
+  }
 }
 
-sizeInput.addEventListener("input", () => {
-  pet.style.setProperty("--navi-pet-size", `${sizeInput.value}px`);
+function editorRow(session: SessionData): HTMLElement {
+  const row = document.createElement("div");
+  row.className = "pg-session";
+  row.dataset.state = session.state;
+
+  const sourceOpts = (Object.keys(sourceConfig) as SourceId[])
+    .map((s) => `<option value="${s}" ${s === session.source ? "selected" : ""}>${sourceConfig[s].label}</option>`)
+    .join("");
+  const stateOpts = agentStates
+    .map((st) => `<option value="${st}" ${st === session.state ? "selected" : ""}>${stateLabels[st]}</option>`)
+    .join("");
+
+  row.innerHTML = `
+    <div class="pg-session-head">
+      <select class="pg-session-source" aria-label="Source">${sourceOpts}</select>
+      <select class="pg-session-state" aria-label="State">${stateOpts}</select>
+      <button type="button" class="pg-session-del" aria-label="Remove session">×</button>
+    </div>
+    <input class="pg-session-title" type="text" value="${escapeAttr(session.label)}" aria-label="Title" />
+    <input class="pg-session-msg" type="text" value="${escapeAttr(session.message ?? "")}" placeholder="message (blank → state label)" aria-label="Message" />
+    <input class="pg-session-proj" type="text" value="${escapeAttr(session.project ?? "")}" placeholder="project name" aria-label="Project" />
+  `;
+
+  const sourceSel = row.querySelector<HTMLSelectElement>(".pg-session-source")!;
+  const stateSel = row.querySelector<HTMLSelectElement>(".pg-session-state")!;
+  const title = row.querySelector<HTMLInputElement>(".pg-session-title")!;
+  const msg = row.querySelector<HTMLInputElement>(".pg-session-msg")!;
+  const proj = row.querySelector<HTMLInputElement>(".pg-session-proj")!;
+
+  sourceSel.addEventListener("change", () => {
+    session.source = sourceSel.value as SourceId;
+    syncSession(session);
+  });
+  stateSel.addEventListener("change", () => {
+    session.state = stateSel.value as AgentState;
+    row.dataset.state = session.state;
+    syncSession(session);
+  });
+  title.addEventListener("input", () => {
+    session.label = title.value;
+    syncSession(session);
+  });
+  msg.addEventListener("input", () => {
+    session.message = msg.value;
+    syncSession(session);
+  });
+  proj.addEventListener("input", () => {
+    session.project = proj.value;
+    syncSession(session);
+  });
+  row
+    .querySelector<HTMLButtonElement>(".pg-session-del")!
+    .addEventListener("click", () => removeSession(session.id));
+
+  return row;
+}
+
+/** session 1件の変更を bubble に反映（エディタは再構築しない＝フォーカス維持）。 */
+function syncSession(session: SessionData): void {
+  const el = bubbles.get(session.id);
+  if (el) updateBubble(el, session);
+  apply();
+}
+
+function addSession(source: SourceId, state: AgentState = "running"): void {
+  const session = makeSession(source, state);
+  sessions.set(session.id, session);
+  renderBubbles();
+  renderEditors();
+  apply();
+}
+
+function removeSession(id: string): void {
+  sessions.delete(id);
+  renderBubbles();
+  renderEditors();
+  apply();
+}
+
+function escapeAttr(v: string): string {
+  return v.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// パネル構築
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Speech グループで代入、shell トグルから参照する。
+let speechModeControl!: { set: (v: SpeechMode) => void };
+
+// Sessions
+{
+  const body = group("Sessions");
+  const actions = document.createElement("div");
+  actions.className = "pg-session-actions";
+  const sources = Object.keys(sourceConfig) as SourceId[];
+  for (const src of sources) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "pg-add";
+    b.textContent = `+ ${sourceConfig[src].label}`;
+    b.addEventListener("click", () => addSession(src));
+    actions.appendChild(b);
+  }
+  body.appendChild(actions);
+
+  const presets = document.createElement("div");
+  presets.className = "pg-session-actions";
+  const longBtn = button("Long message", () => {
+    addSession("claude-code", "thinking");
+    const last = Array.from(sessions.values()).at(-1)!;
+    last.message =
+      "Refactoring the highest-priority state resolver so that multiple concurrent agent sessions collapse into a single pet animation without dropping the per-session speech bubbles — this line is intentionally very long to test overflow.";
+    last.project = "a-rather-long-monorepo-project-name-for-overflow";
+    last.label = "Claude Code — long running task with a long title";
+    syncSession(last);
+    renderEditors();
+  });
+  const fillBtn = button("Fill ×5", () => {
+    const order: [SourceId, AgentState][] = [
+      ["claude-code", "running"],
+      ["codex", "waiting_approval"],
+      ["copilot", "editing"],
+      ["claude-code", "error"],
+      ["codex", "thinking"],
+    ];
+    for (const [src, st] of order) addSession(src, st);
+  });
+  const clearBtn = button("Clear", () => {
+    sessions.clear();
+    renderBubbles();
+    renderEditors();
+    apply();
+  });
+  presets.append(longBtn, fillBtn, clearBtn);
+  body.appendChild(presets);
+
+  const list = document.createElement("div");
+  list.className = "pg-session-list";
+  body.appendChild(list);
+  editorBody = list;
+}
+
+function button(label: string, onClick: () => void): HTMLButtonElement {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "pg-add";
+  b.textContent = label;
+  b.addEventListener("click", onClick);
+  return b;
+}
+
+// Pet
+{
+  const body = group("Pet");
+  slider(body, {
+    label: "Size",
+    min: 64,
+    max: 256,
+    value: params.petSize,
+    unit: "px",
+    onInput: (v) => {
+      params.petSize = v;
+      apply();
+    },
+  });
+  slider(body, {
+    label: "Anim fps (0 = default)",
+    min: 0,
+    max: 16,
+    value: params.fps,
+    onInput: (v) => {
+      params.fps = v;
+      apply();
+    },
+  });
+}
+
+// Speech
+{
+  const body = group("Speech");
+  speechModeControl = segmented<SpeechMode>(
+    body,
+    "Mode",
+    ["show", "hide", "auto"],
+    params.speechMode,
+    (v) => {
+      params.speechMode = v;
+      apply();
+    },
+  );
+  slider(body, {
+    label: "Max visible (then scroll)",
+    min: 1,
+    max: 6,
+    value: params.maxVisible,
+    onInput: (v) => {
+      params.maxVisible = v;
+      apply();
+    },
+  });
+  slider(body, {
+    label: "Stack gap",
+    min: 0,
+    max: 24,
+    value: params.bubbleGap,
+    unit: "px",
+    onInput: (v) => {
+      params.bubbleGap = v;
+      apply();
+    },
+  });
+}
+
+// Bubble
+{
+  const body = group("Bubble");
+  const defs: SliderOpts[] = [
+    { label: "Max width", min: 180, max: 360, value: params.bubbleWidth, unit: "px", onInput: (v) => (params.bubbleWidth = v) },
+    { label: "Padding X", min: 4, max: 24, value: params.bubblePadX, unit: "px", onInput: (v) => (params.bubblePadX = v) },
+    { label: "Padding Y", min: 4, max: 24, value: params.bubblePadY, unit: "px", onInput: (v) => (params.bubblePadY = v) },
+    { label: "Corner radius", min: 0, max: 24, value: params.bubbleRadius, unit: "px", onInput: (v) => (params.bubbleRadius = v) },
+    { label: "Offset X (from pet)", min: 0, max: 60, value: params.bubbleOffsetX, unit: "px", onInput: (v) => (params.bubbleOffsetX = v) },
+    { label: "Offset Y (above pet)", min: 0, max: 60, value: params.bubbleOffsetY, unit: "px", onInput: (v) => (params.bubbleOffsetY = v) },
+    { label: "Shadow Y", min: 0, max: 24, value: params.shadowY, unit: "px", onInput: (v) => (params.shadowY = v) },
+    { label: "Shadow blur", min: 0, max: 48, value: params.shadowBlur, unit: "px", onInput: (v) => (params.shadowBlur = v) },
+  ];
+  for (const d of defs) {
+    const orig = d.onInput;
+    slider(body, {
+      ...d,
+      onInput: (v) => {
+        orig(v);
+        apply();
+      },
+    });
+  }
+  slider(body, {
+    label: "Shadow opacity",
+    min: 0,
+    max: 0.5,
+    step: 0.01,
+    value: params.shadowAlpha,
+    onInput: (v) => {
+      params.shadowAlpha = v;
+      apply();
+    },
+  });
+  toggle(body, "Tail", params.tail, (v) => {
+    params.tail = v;
+    apply();
+  });
+}
+
+// Source colors
+{
+  const body = group("Source colors");
+  color(body, "Claude Code", params.colors["claude-code"], (v) => {
+    params.colors["claude-code"] = v;
+    apply();
+  });
+  color(body, "Codex", params.colors.codex, (v) => {
+    params.colors.codex = v;
+    apply();
+  });
+  color(body, "Copilot", params.colors.copilot, (v) => {
+    params.colors.copilot = v;
+    apply();
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// shell 内のトグル / コピー
+// ─────────────────────────────────────────────────────────────────────────────
+
+toggleBtn.addEventListener("click", () => {
+  params.speechMode = speechVisible() ? "hide" : "show";
+  speechModeControl.set(params.speechMode);
+  apply();
 });
 
-// navi-pet が毎フレーム書き込む current-animation を表示に反映
+copyBtn.addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(readoutCode.textContent ?? "");
+    copyBtn.textContent = "Copied!";
+    setTimeout(() => (copyBtn.textContent = "Copy CSS"), 1200);
+  } catch {
+    copyBtn.textContent = "Copy failed";
+    setTimeout(() => (copyBtn.textContent = "Copy CSS"), 1200);
+  }
+});
+
+// pet が毎フレーム書き込む current-animation をデバッグ表示（stage 隅）
+const animBadge = document.createElement("div");
+animBadge.className = "pg-anim-badge";
+stage.appendChild(animBadge);
 const observer = new MutationObserver(() => {
-  animLabel.textContent = pet.getAttribute("current-animation") ?? "–";
+  animBadge.textContent = `${getHighestState()} → ${pet.getAttribute("current-animation") ?? "–"}`;
 });
 observer.observe(pet, { attributes: true, attributeFilter: ["current-animation"] });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 初期セッション
+// ─────────────────────────────────────────────────────────────────────────────
+
+addSession("claude-code", "running");
+addSession("codex", "waiting_approval");
+apply();
