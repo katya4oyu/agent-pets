@@ -2,14 +2,14 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-See @README.md for overview, @docs/concept.md for project concept and **important terminology** (read it — past sessions lost time confusing "codex 本家" with `codex-pet-web`).
+See @README.md for overview, @docs/concept.md for project concept, and @docs/glossary.md for the **strict terminology table** (authoritative names + code identifiers — read it before naming UI parts; e.g. the cards above the avatar are **ステータスカード / status card**, not 吹き出し/toast/speech. Past sessions lost time confusing "codex 本家" with `codex-pet-web`).
 
 ## Layout
 
 pnpm workspace (`app`, `packages/*`, `examples/*`). Run `pnpm install` at the root first.
 
 - `app/` — the Tauri desktop app (frontend `app/src` + Rust `app/src-tauri`).
-- `packages/ui` (`@navi/ui`) — navi presentation layer. `src/codex-pet/` is the codex-compatible sprite renderer; navi-specific UI will live alongside it.
+- `packages/ui` (`@navi/ui`) — navi presentation layer. `src/codex-pet/` is the codex-compatible sprite renderer; `src/navi/` is the navi-specific UI (status card / source badge / state model), consumed by both the app shell and the playground.
 - `examples/playground` — standalone browser sandbox (imports `@navi/ui`) for tuning the pet + UI design. Cloudflare deploy target.
 
 ## Commands
@@ -42,7 +42,7 @@ navi-hook (Rust CLI, app/src-tauri/src/bin/navi_hook.rs)
 - **Pure logic is deliberately split out** for headless testing and a future backend World Model: `app/src/state.ts` (priority/labels/animation table, fully DOM/Tauri-free, covered by `state.test.ts`) and the Rust `agent-pets-core` crate (`app/src-tauri/core`, normalization/schema).
 - **`app/src/bridge.ts` is the only Tauri touch point** in the frontend (wraps `invoke`/`listen`/window drag). Outside Tauri it falls back to a browser mock, so the frontend can run without the desktop app.
 - **Frontend↔Tauri build coupling**: `app/src-tauri/tauri.conf.json` sets `frontendDist: ../dist` and `beforeBuildCommand: pnpm build`; `app` is a single Vite entry (`index.html` → `main.ts`). The browser sandbox is a separate app (`examples/playground`, its own `index.html`); the root `wrangler.jsonc` serves `./examples/playground/dist` and deploys from the repo root.
-- **Sprite rendering follows the codex-compatible atlas** (8×9, 192×208; `docs/codex-pet-spritesheets.md`). The `<navi-pet>` web component + `pet-core` live in `packages/ui/src/codex-pet/` (used by the playground). Note `app/src/main.ts` does **not** use them yet — the Tauri shell still renders sprites on its own `<canvas>`. The navi-specific UI extraction into `@navi/ui` is still pending (`@docs/frontend-packaging.md`, `issues/a7f3d2`).
+- **Sprite rendering follows the codex-compatible atlas** (8×9, 192×208; `docs/codex-pet-spritesheets.md`). The `<navi-pet>` web component + `pet-core` live in `packages/ui/src/codex-pet/` (used by the playground). Note `app/src/main.ts` does **not** use `<navi-pet>` yet — the Tauri shell still renders sprites on its own `<canvas>` (migration pending: `issues/e1f5c3`). The navi-specific UI (status card / source badge / state model) **is** extracted into `@navi/ui` (`src/navi/`, issue `c4b1e0` done) and consumed by both the app shell and the playground.
 
 ## Project rules / gotchas
 
