@@ -8,10 +8,10 @@ import {
   sourceConfig,
   stateLabels,
   highestPriorityState,
-  isSpeechVisibleInAuto,
-  createBubble,
-  updateBubble,
-} from "./navi-ui";
+  isVisibleInAuto,
+  createStatusCard,
+  updateStatusCard,
+} from "./status-card";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // playground = pet アバター × navi 固有 UI の統合デザインをチューニングするサンドボックス
@@ -19,43 +19,43 @@ import {
 // → エージェントがコンポーネント既定値 / シェルへ焼き込む。
 // ─────────────────────────────────────────────────────────────────────────────
 
-type SpeechMode = "show" | "hide" | "auto";
+type DisplayMode = "show" | "hide" | "auto";
 
 interface Params {
   petSize: number;
-  bubbleWidth: number;
-  bubblePadX: number;
-  bubblePadY: number;
-  bubbleRadius: number;
-  bubbleGap: number;
-  bubbleOffsetX: number;
-  bubbleOffsetY: number;
+  cardWidth: number;
+  cardPadX: number;
+  cardPadY: number;
+  cardRadius: number;
+  cardGap: number;
+  cardOffsetX: number;
+  cardOffsetY: number;
   shadowY: number;
   shadowBlur: number;
   shadowAlpha: number;
   maxVisible: number;
   tail: boolean;
   fps: number; // 0 = pet.json 既定
-  speechMode: SpeechMode;
+  displayMode: DisplayMode;
   colors: Record<SourceId, string>;
 }
 
 const params: Params = {
   petSize: 128,
-  bubbleWidth: 266,
-  bubblePadX: 10,
-  bubblePadY: 9,
-  bubbleRadius: 12,
-  bubbleGap: 6,
-  bubbleOffsetX: 8,
-  bubbleOffsetY: 8,
+  cardWidth: 266,
+  cardPadX: 10,
+  cardPadY: 9,
+  cardRadius: 12,
+  cardGap: 6,
+  cardOffsetX: 8,
+  cardOffsetY: 8,
   shadowY: 8,
   shadowBlur: 22,
   shadowAlpha: 0.18,
   maxVisible: 3,
   tail: true,
   fps: 0,
-  speechMode: "show",
+  displayMode: "show",
   colors: {
     "claude-code": sourceConfig["claude-code"].color,
     codex: sourceConfig.codex.color,
@@ -67,7 +67,7 @@ const params: Params = {
 
 let seq = 0;
 const sessions = new Map<string, SessionData>();
-const bubbles = new Map<string, HTMLElement>();
+const cards = new Map<string, HTMLElement>();
 
 // UI 名ラベル（glossary の正式名をステージ上に重ねるデバッグ表示）の ON/OFF。
 let uiNames = false;
@@ -107,9 +107,9 @@ if (!root) {
 root.innerHTML = `
   <div class="pg-stage">
     <div class="navi-shell" aria-label="navi status">
-      <div class="navi-bubbles"></div>
+      <div class="status-stack"></div>
       <div class="navi-pet-wrap">
-        <button class="bubble-toggle" type="button" aria-label="Hide speech bubbles" aria-pressed="true">
+        <button class="status-toggle" type="button" aria-label="Hide status cards" aria-pressed="true">
           <span class="toggle-chevron" aria-hidden="true"></span>
           <span class="session-count" aria-label="0 active agent sessions">0</span>
         </button>
@@ -135,9 +135,9 @@ root.innerHTML = `
 
 const stage = root.querySelector<HTMLElement>(".pg-stage")!;
 const shell = root.querySelector<HTMLElement>(".navi-shell")!;
-const bubblesEl = root.querySelector<HTMLElement>(".navi-bubbles")!;
+const stackEl = root.querySelector<HTMLElement>(".status-stack")!;
 const pet = root.querySelector<HTMLElement>("navi-pet")!;
-const toggleBtn = root.querySelector<HTMLButtonElement>(".bubble-toggle")!;
+const toggleBtn = root.querySelector<HTMLButtonElement>(".status-toggle")!;
 const sessionCountEl = root.querySelector<HTMLElement>(".session-count")!;
 const controlsEl = root.querySelector<HTMLElement>(".pg-controls")!;
 const readoutCode = root.querySelector<HTMLElement>(".pg-readout-body code")!;
@@ -252,34 +252,34 @@ function segmented<T extends string>(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 反映：params → CSS 変数 / pet / 吹き出し可視性 / readout
+// 反映：params → CSS 変数 / pet / ステータスカード可視性 / readout
 // ─────────────────────────────────────────────────────────────────────────────
 
 function getHighestState(): AgentState {
   return highestPriorityState(Array.from(sessions.values(), (s) => s.state));
 }
 
-function speechVisible(): boolean {
-  if (params.speechMode === "show") return true;
-  if (params.speechMode === "hide") return false;
-  return isSpeechVisibleInAuto(getHighestState());
+function cardsVisible(): boolean {
+  if (params.displayMode === "show") return true;
+  if (params.displayMode === "hide") return false;
+  return isVisibleInAuto(getHighestState());
 }
 
 function apply(): void {
   const s = shell.style;
   s.setProperty("--pet-size", `${params.petSize}px`);
   pet.style.setProperty("--navi-pet-size", `${params.petSize}px`);
-  s.setProperty("--bubble-width", `${params.bubbleWidth}px`);
-  s.setProperty("--bubble-pad-x", `${params.bubblePadX}px`);
-  s.setProperty("--bubble-pad-y", `${params.bubblePadY}px`);
-  s.setProperty("--bubble-radius", `${params.bubbleRadius}px`);
-  s.setProperty("--bubble-gap", `${params.bubbleGap}px`);
-  s.setProperty("--bubble-offset-x", `${params.bubbleOffsetX}px`);
-  s.setProperty("--bubble-offset-y", `${params.bubbleOffsetY}px`);
-  s.setProperty("--bubble-shadow-y", `${params.shadowY}px`);
-  s.setProperty("--bubble-shadow-blur", `${params.shadowBlur}px`);
-  s.setProperty("--bubble-shadow-alpha", String(params.shadowAlpha));
-  s.setProperty("--bubble-max-visible", String(params.maxVisible));
+  s.setProperty("--card-width", `${params.cardWidth}px`);
+  s.setProperty("--card-pad-x", `${params.cardPadX}px`);
+  s.setProperty("--card-pad-y", `${params.cardPadY}px`);
+  s.setProperty("--card-radius", `${params.cardRadius}px`);
+  s.setProperty("--card-gap", `${params.cardGap}px`);
+  s.setProperty("--card-offset-x", `${params.cardOffsetX}px`);
+  s.setProperty("--card-offset-y", `${params.cardOffsetY}px`);
+  s.setProperty("--card-shadow-y", `${params.shadowY}px`);
+  s.setProperty("--card-shadow-blur", `${params.shadowBlur}px`);
+  s.setProperty("--card-shadow-alpha", String(params.shadowAlpha));
+  s.setProperty("--card-max-visible", String(params.maxVisible));
   s.setProperty("--src-claude-code", params.colors["claude-code"]);
   s.setProperty("--src-codex", params.colors.codex);
   s.setProperty("--src-copilot", params.colors.copilot);
@@ -291,12 +291,12 @@ function apply(): void {
 
   pet.setAttribute("state", getHighestState());
 
-  const visible = speechVisible();
-  shell.classList.toggle("speech-hidden", !visible);
+  const visible = cardsVisible();
+  shell.classList.toggle("status-hidden", !visible);
   toggleBtn.setAttribute("aria-pressed", String(visible));
   toggleBtn.setAttribute(
     "aria-label",
-    visible ? "Hide speech bubbles" : "Show speech bubbles",
+    visible ? "Hide status cards" : "Show status cards",
   );
 
   const count = sessions.size;
@@ -315,21 +315,21 @@ function refreshReadout(): void {
     "/* navi UI — tuned in playground */",
     ".pet-shell {",
     `  --pet-size: ${params.petSize}px;`,
-    `  --bubble-width: ${params.bubbleWidth}px;`,
-    `  --bubble-pad: ${params.bubblePadY}px ${params.bubblePadX}px;`,
-    `  --bubble-radius: ${params.bubbleRadius}px;`,
-    `  --bubble-gap: ${params.bubbleGap}px;`,
-    `  --bubble-offset-x: ${params.bubbleOffsetX}px;`,
-    `  --bubble-offset-y: ${params.bubbleOffsetY}px;`,
-    `  --bubble-shadow: 0 ${params.shadowY}px ${params.shadowBlur}px rgba(16, 19, 28, ${params.shadowAlpha});`,
-    `  --bubble-max-visible: ${params.maxVisible};`,
-    `  --bubble-tail: ${params.tail ? "on" : "off"};`,
+    `  --card-width: ${params.cardWidth}px;`,
+    `  --card-pad: ${params.cardPadY}px ${params.cardPadX}px;`,
+    `  --card-radius: ${params.cardRadius}px;`,
+    `  --card-gap: ${params.cardGap}px;`,
+    `  --card-offset-x: ${params.cardOffsetX}px;`,
+    `  --card-offset-y: ${params.cardOffsetY}px;`,
+    `  --card-shadow: 0 ${params.shadowY}px ${params.shadowBlur}px rgba(16, 19, 28, ${params.shadowAlpha});`,
+    `  --card-max-visible: ${params.maxVisible};`,
+    `  --card-tail: ${params.tail ? "on" : "off"};`,
     `  --src-claude-code: ${params.colors["claude-code"]};`,
     `  --src-codex: ${params.colors.codex};`,
     `  --src-copilot: ${params.colors.copilot};`,
     "}",
     "",
-    `/* pet fps: ${params.fps > 0 ? params.fps : "pet.json default"} · speech-mode: ${params.speechMode} */`,
+    `/* pet fps: ${params.fps > 0 ? params.fps : "pet.json default"} · display-mode: ${params.displayMode} */`,
   ];
   readoutCode.textContent = lines.join("\n");
 }
@@ -407,39 +407,39 @@ function refreshUiNames(): void {
   }
 
   // スタックが見えているときだけ、その内側の部品を案内
-  if (!shell.classList.contains("speech-hidden")) {
-    place(bubblesEl, "ステータススタック", "top");
-    const cards = bubblesEl.querySelectorAll(".speech");
+  if (!shell.classList.contains("status-hidden")) {
+    place(stackEl, "ステータススタック", "top");
+    const cards = stackEl.querySelectorAll(".status-card");
     const lastCard = cards[cards.length - 1] as HTMLElement | undefined;
     place(lastCard, "ステータスカード", "left");
     place(lastCard?.querySelector(".source-badge"), "ソースバッジ", "right");
-    place(lastCard?.querySelector(".speech-tail"), "尻尾", "bottom");
+    place(lastCard?.querySelector(".status-card-tail"), "尻尾", "bottom");
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 吹き出しスタック ↔ session の同期
+// ステータスカード ↔ session の同期
 // ─────────────────────────────────────────────────────────────────────────────
 
 let editorBody: HTMLElement | null = null;
 
-function renderBubbles(): void {
+function renderStatusCards(): void {
   // 既存セッション分を upsert
   for (const session of sessions.values()) {
-    let el = bubbles.get(session.id);
+    let el = cards.get(session.id);
     if (!el) {
-      el = createBubble(session, { onClose: removeSession });
-      bubbles.set(session.id, el);
-      bubblesEl.appendChild(el);
+      el = createStatusCard(session, { onClose: removeSession });
+      cards.set(session.id, el);
+      stackEl.appendChild(el);
     } else {
-      updateBubble(el, session);
+      updateStatusCard(el, session);
     }
   }
-  // 消えたセッションの bubble を除去
-  for (const [id, el] of bubbles) {
+  // 消えたセッションの card を除去
+  for (const [id, el] of cards) {
     if (!sessions.has(id)) {
       el.remove();
-      bubbles.delete(id);
+      cards.delete(id);
     }
   }
 }
@@ -451,7 +451,7 @@ function renderEditors(): void {
   if (sessions.size === 0) {
     const empty = document.createElement("p");
     empty.className = "pg-empty";
-    empty.textContent = "No sessions. Add one to see the bubble stack.";
+    empty.textContent = "No sessions. Add one to see the card stack.";
     editorBody.appendChild(empty);
     return;
   }
@@ -518,24 +518,24 @@ function editorRow(session: SessionData): HTMLElement {
   return row;
 }
 
-/** session 1件の変更を bubble に反映（エディタは再構築しない＝フォーカス維持）。 */
+/** session 1件の変更を card に反映（エディタは再構築しない＝フォーカス維持）。 */
 function syncSession(session: SessionData): void {
-  const el = bubbles.get(session.id);
-  if (el) updateBubble(el, session);
+  const el = cards.get(session.id);
+  if (el) updateStatusCard(el, session);
   apply();
 }
 
 function addSession(source: SourceId, state: AgentState = "running"): void {
   const session = makeSession(source, state);
   sessions.set(session.id, session);
-  renderBubbles();
+  renderStatusCards();
   renderEditors();
   apply();
 }
 
 function removeSession(id: string): void {
   sessions.delete(id);
-  renderBubbles();
+  renderStatusCards();
   renderEditors();
   apply();
 }
@@ -548,8 +548,8 @@ function escapeAttr(v: string): string {
 // パネル構築
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Speech グループで代入、shell トグルから参照する。
-let speechModeControl!: { set: (v: SpeechMode) => void };
+// Stack グループで代入、shell トグルから参照する。
+let displayModeControl!: { set: (v: DisplayMode) => void };
 
 // Sessions
 {
@@ -573,7 +573,7 @@ let speechModeControl!: { set: (v: SpeechMode) => void };
     addSession("claude-code", "thinking");
     const last = Array.from(sessions.values()).at(-1)!;
     last.message =
-      "Refactoring the highest-priority state resolver so that multiple concurrent agent sessions collapse into a single pet animation without dropping the per-session speech bubbles — this line is intentionally very long to test overflow.";
+      "Refactoring the highest-priority state resolver so that multiple concurrent agent sessions collapse into a single pet animation without dropping the per-session status cards — this line is intentionally very long to test overflow.";
     last.project = "a-rather-long-monorepo-project-name-for-overflow";
     last.label = "Claude Code — long running task with a long title";
     syncSession(last);
@@ -591,7 +591,7 @@ let speechModeControl!: { set: (v: SpeechMode) => void };
   });
   const clearBtn = button("Clear", () => {
     sessions.clear();
-    renderBubbles();
+    renderStatusCards();
     renderEditors();
     apply();
   });
@@ -639,16 +639,16 @@ function button(label: string, onClick: () => void): HTMLButtonElement {
   });
 }
 
-// Speech
+// Stack
 {
-  const body = group("Speech");
-  speechModeControl = segmented<SpeechMode>(
+  const body = group("Stack");
+  displayModeControl = segmented<DisplayMode>(
     body,
     "Mode",
     ["show", "hide", "auto"],
-    params.speechMode,
+    params.displayMode,
     (v) => {
-      params.speechMode = v;
+      params.displayMode = v;
       apply();
     },
   );
@@ -666,25 +666,25 @@ function button(label: string, onClick: () => void): HTMLButtonElement {
     label: "Stack gap",
     min: 0,
     max: 24,
-    value: params.bubbleGap,
+    value: params.cardGap,
     unit: "px",
     onInput: (v) => {
-      params.bubbleGap = v;
+      params.cardGap = v;
       apply();
     },
   });
 }
 
-// Bubble
+// Card
 {
-  const body = group("Bubble");
+  const body = group("Card");
   const defs: SliderOpts[] = [
-    { label: "Max width", min: 180, max: 360, value: params.bubbleWidth, unit: "px", onInput: (v) => (params.bubbleWidth = v) },
-    { label: "Padding X", min: 4, max: 24, value: params.bubblePadX, unit: "px", onInput: (v) => (params.bubblePadX = v) },
-    { label: "Padding Y", min: 4, max: 24, value: params.bubblePadY, unit: "px", onInput: (v) => (params.bubblePadY = v) },
-    { label: "Corner radius", min: 0, max: 24, value: params.bubbleRadius, unit: "px", onInput: (v) => (params.bubbleRadius = v) },
-    { label: "Offset X (from pet)", min: 0, max: 60, value: params.bubbleOffsetX, unit: "px", onInput: (v) => (params.bubbleOffsetX = v) },
-    { label: "Offset Y (above pet)", min: 0, max: 60, value: params.bubbleOffsetY, unit: "px", onInput: (v) => (params.bubbleOffsetY = v) },
+    { label: "Max width", min: 180, max: 360, value: params.cardWidth, unit: "px", onInput: (v) => (params.cardWidth = v) },
+    { label: "Padding X", min: 4, max: 24, value: params.cardPadX, unit: "px", onInput: (v) => (params.cardPadX = v) },
+    { label: "Padding Y", min: 4, max: 24, value: params.cardPadY, unit: "px", onInput: (v) => (params.cardPadY = v) },
+    { label: "Corner radius", min: 0, max: 24, value: params.cardRadius, unit: "px", onInput: (v) => (params.cardRadius = v) },
+    { label: "Offset X (from pet)", min: 0, max: 60, value: params.cardOffsetX, unit: "px", onInput: (v) => (params.cardOffsetX = v) },
+    { label: "Offset Y (above pet)", min: 0, max: 60, value: params.cardOffsetY, unit: "px", onInput: (v) => (params.cardOffsetY = v) },
     { label: "Shadow Y", min: 0, max: 24, value: params.shadowY, unit: "px", onInput: (v) => (params.shadowY = v) },
     { label: "Shadow blur", min: 0, max: 48, value: params.shadowBlur, unit: "px", onInput: (v) => (params.shadowBlur = v) },
   ];
@@ -746,8 +746,8 @@ function button(label: string, onClick: () => void): HTMLButtonElement {
 // ─────────────────────────────────────────────────────────────────────────────
 
 toggleBtn.addEventListener("click", () => {
-  params.speechMode = speechVisible() ? "hide" : "show";
-  speechModeControl.set(params.speechMode);
+  params.displayMode = cardsVisible() ? "hide" : "show";
+  displayModeControl.set(params.displayMode);
   apply();
 });
 
@@ -772,7 +772,7 @@ const observer = new MutationObserver(() => {
 observer.observe(pet, { attributes: true, attributeFilter: ["current-animation"] });
 
 // UI 名ラベルはステージ上の実位置に追従させる（スクロール / リサイズで再計算）。
-bubblesEl.addEventListener("scroll", refreshUiNames);
+stackEl.addEventListener("scroll", refreshUiNames);
 window.addEventListener("resize", refreshUiNames);
 
 // ─────────────────────────────────────────────────────────────────────────────

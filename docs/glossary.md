@@ -16,17 +16,18 @@
 | 正式名 | 定義 | コード識別子（現状） | 別名/旧称 | これではない |
 |---|---|---|---|---|
 | **アバター** (avatar / pet) | 全セッションの集約状態を体現するキャラ本体。スプライトを描画し、ドラッグ／リサイズを持つ。 | `<navi-pet>`（`packages/ui/src/codex-pet/navi-pet.ts`）。app シェルは独自 canvas（`app/src/main.ts` の `.pet-sprite`） | ペット, pet, mio（mio は具体キャラ名） | 喋るキャラではない（発話 UI ではない） |
-| **ステータスカード** (status card) | **1 エージェント・セッションの現在状態を表す 1 枚**。source / state / タイトル / message / cwd を含む。セッションが続く限り残り、その場で更新される。 | `.speech`（`app/src/styles.css`, `examples/playground`）, `createBubbleElement` / `updateBubbleElement`（`app/src/main.ts`）, `createBubble` / `updateBubble`（`examples/playground/src/navi-ui.ts`） | **吹き出し**, speech bubble, bubble, speech | セリフ／チャット発言ではない。トーストでもない（→ §4） |
-| **ステータススタック** (status stack) | ステータスカードを縦に積む列。**最大 3 枚、超過はスクロール**（`issues/b3f2a1`）。 | `.speech-stack`（app）, `.navi-bubbles`（playground） | 吹き出しスタック, bubble stack | — |
+| **ステータスカード** (status card) | **1 エージェント・セッションの現在状態を表す 1 枚**。source / state / タイトル / message / cwd を含む。セッションが続く限り残り、その場で更新される。 | `.status-card`（`app/src/styles.css`, `examples/playground`）, `createStatusCard` / `updateStatusCard` / `removeStatusCard`（`app/src/main.ts`）, `createStatusCard` / `updateStatusCard`（`examples/playground/src/status-card.ts`） | **吹き出し**, speech bubble, bubble, speech（いずれも旧称） | セリフ／チャット発言ではない。トーストでもない（→ §4） |
+| **ステータススタック** (status stack) | ステータスカードを縦に積む列。**最大 3 枚、超過はスクロール**（`issues/b3f2a1`）。 | `.status-stack`（app / playground 共通） | 吹き出しスタック, `.speech-stack`, `.navi-bubbles`（旧称） | — |
 | **ソースバッジ** (source badge) | カード上の、どのエージェント由来かを示すロゴ。`@lobehub/icons-static-svg` の実ロゴを `currentColor` で着色。 | `.source-badge`, `sourceConfig`（app / playground） | バッジ | — |
-| **尻尾** (tail) | ステータスカードがアバターを指す三角の突起（callout のポインタ）。 | `.speech-tail`（playground。app には未実装） | しっぽ, pointer | — |
+| **尻尾** (tail) | ステータスカードがアバターを指す三角の突起（callout のポインタ）。 | `.status-card-tail`（playground。app には未実装） | しっぽ, pointer, `.speech-tail`（旧称） | — |
 | **セッションカウント** (session count) | アクティブなセッション数。スタック非表示時にトグル上へ出る。 | `.session-count` | カウント | 通知バッジ（未読数）ではない |
-| **表示トグル** (toggle) | スタックの表示/非表示を切り替えるボタン。 | `.bubble-toggle` | トグル | — |
+| **表示トグル** (toggle) | スタックの表示/非表示を切り替えるボタン。 | `.status-toggle` | トグル, `.bubble-toggle`（旧称） | — |
 | **リサイズハンドル** (resize handle) | アバターのサイズ変更つまみ（右下）。 | `.resize-handle` | — | — |
 | **設定ボタン** (settings) | hook セットアップ等の操作（⚙）。 | `.setup-btn` | — | — |
 | **ペット発話** (PetSpeech) | `<navi-pet>` 自身が持つ**単発・一時**の吹き出し（`duration` で自動消滅）。**ステータスカードとは別物**。 | `say()` / `clearSpeech()` / `speech` 属性 / `.speech`（navi-pet 内部・シャドウ DOM） | navi-pet の speech | ステータスカードではない（こちらは状態表示・連続更新） |
 
-> ⚠️ **`.speech` 衝突注意**: 「ステータスカード（§1）」と「ペット発話（navi-pet 内部）」が**同じ `.speech`** を使っている。出自が違う別概念なので、会話では必ず**ステータスカード**／**ペット発話**で呼び分ける。コードのリネームは `c4b1e0` で解消予定。
+> ✅ **`.speech` 衝突は解消済み**: navi 固有 UI 側は `.status-card` / `.status-stack` 等へリネーム済み（`c4b1e0` の命名を前倒し適用）。`.speech` は **ペット発話（`<navi-pet>` 内部）専用**になった。会話でも **ステータスカード**／**ペット発話** を必ず呼び分ける。
+> ※ Rust↔TS の IPC イベント名 `"set-speech-mode"` と値 `show/hide/auto` は**プロトコル境界のため未改名**（TS 型は `DisplayMode` へ改名済み）。
 
 ---
 
@@ -49,7 +50,7 @@
 |---|---|---|
 | **アテンション** (attention request) | **人間の操作・判断を要する** state の部分集合 = `{ waiting_approval, error }`。唯一「通知」に相当する区分。 | （区分。§4 参照） |
 | **最優先 state** (highest-priority state) | 全セッションの state を `STATE_PRIORITY` で比較した最大値。**アバターのアニメを決める**。セッションが無ければ `done`。 | `highestPriorityState()` |
-| **表示モード** (speech mode) | スタックの可視性ポリシー。`show`=常時表示 / `hide`=常時非表示 / `auto`=最優先が `done` 以外のとき表示。 | `SpeechMode`, `isSpeechVisibleInAuto()` |
+| **表示モード** (display mode) | スタックの可視性ポリシー。`show`=常時表示 / `hide`=常時非表示 / `auto`=最優先が `done` 以外のとき表示。 | `DisplayMode`, `isVisibleInAuto()`（旧 `SpeechMode` / `isSpeechVisibleInAuto`） |
 
 ---
 

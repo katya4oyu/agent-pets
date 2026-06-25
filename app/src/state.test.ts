@@ -7,9 +7,9 @@ import {
   animations,
   sessionKey,
   highestPriorityState,
-  bubbleMessage,
-  bubbleDir,
-  isSpeechVisibleInAuto,
+  cardMessage,
+  cardDir,
+  isVisibleInAuto,
 } from "./state";
 
 const ALL_STATES: AgentState[] = [
@@ -89,16 +89,16 @@ describe("highestPriorityState", () => {
   });
 });
 
-describe("bubbleMessage", () => {
+describe("cardMessage", () => {
   it("uses the explicit message when present", () => {
-    expect(bubbleMessage(event({ message: "cargo test" }))).toBe("cargo test");
+    expect(cardMessage(event({ message: "cargo test" }))).toBe("cargo test");
   });
 
   it("falls back to the human label for the state when no message is given", () => {
-    expect(bubbleMessage(event({ state: "waiting_approval", message: undefined }))).toBe(
+    expect(cardMessage(event({ state: "waiting_approval", message: undefined }))).toBe(
       stateLabels.waiting_approval,
     );
-    expect(bubbleMessage(event({ state: "done" }))).toBe(stateLabels.done);
+    expect(cardMessage(event({ state: "done" }))).toBe(stateLabels.done);
   });
 
   it("falls back to the raw label for an unknown state", () => {
@@ -107,36 +107,36 @@ describe("bubbleMessage", () => {
       label: "Pondering",
       message: undefined,
     });
-    expect(bubbleMessage(weird)).toBe("Pondering");
+    expect(cardMessage(weird)).toBe("Pondering");
   });
 });
 
-describe("bubbleDir", () => {
+describe("cardDir", () => {
   it("prefers the project name when present", () => {
-    expect(bubbleDir({ project_name: "agent-pets", cwd: "/home/user/x" })).toBe(
+    expect(cardDir({ project_name: "agent-pets", cwd: "/home/user/x" })).toBe(
       "agent-pets",
     );
   });
 
   it("uses the last path segment of cwd when there is no project name", () => {
-    expect(bubbleDir({ cwd: "/home/user/projects/navi" })).toBe("navi");
+    expect(cardDir({ cwd: "/home/user/projects/navi" })).toBe("navi");
   });
 
   it("ignores trailing slashes in cwd", () => {
-    expect(bubbleDir({ cwd: "/home/user/projects/navi/" })).toBe("navi");
+    expect(cardDir({ cwd: "/home/user/projects/navi/" })).toBe("navi");
   });
 
   it("returns null when neither project name nor cwd is available", () => {
-    expect(bubbleDir({})).toBeNull();
-    expect(bubbleDir({ cwd: "" })).toBeNull();
+    expect(cardDir({})).toBeNull();
+    expect(cardDir({ cwd: "" })).toBeNull();
   });
 });
 
-describe("isSpeechVisibleInAuto", () => {
-  it("hides the bubble only when the aggregate state is done", () => {
-    expect(isSpeechVisibleInAuto("done")).toBe(false);
+describe("isVisibleInAuto", () => {
+  it("hides the cards only when the aggregate state is done", () => {
+    expect(isVisibleInAuto("done")).toBe(false);
     for (const state of ALL_STATES.filter((s) => s !== "done")) {
-      expect(isSpeechVisibleInAuto(state)).toBe(true);
+      expect(isVisibleInAuto(state)).toBe(true);
     }
   });
 });

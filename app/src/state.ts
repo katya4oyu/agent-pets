@@ -16,7 +16,7 @@ export type AgentState =
   | "done"
   | "error";
 
-export type SpeechMode = "show" | "hide" | "auto";
+export type DisplayMode = "show" | "hide" | "auto";
 
 export interface HookEventPayload {
   source: string;
@@ -66,7 +66,7 @@ export const animations: Record<AgentState, AnimationSpec> = {
 };
 
 /**
- * Stable key used to group events into a single bubble/session.
+ * Stable key used to group events into a single status card/session.
  * Falls back to the source name when no session id is provided.
  */
 export function sessionKey(
@@ -91,13 +91,13 @@ export function highestPriorityState(states: Iterable<AgentState>): AgentState {
   return best;
 }
 
-/** Text shown in a bubble: explicit message, else a label for the state. */
-export function bubbleMessage(payload: HookEventPayload): string {
+/** Text shown in a status card: explicit message, else a label for the state. */
+export function cardMessage(payload: HookEventPayload): string {
   return payload.message ?? stateLabels[payload.state] ?? payload.label;
 }
 
 /** Short directory label: prefer project name, else the last path segment. */
-export function bubbleDir(
+export function cardDir(
   payload: Pick<HookEventPayload, "project_name" | "cwd">,
 ): string | null {
   return (
@@ -106,7 +106,7 @@ export function bubbleDir(
   );
 }
 
-/** In "auto" speech mode, the bubble is shown unless everything is done. */
-export function isSpeechVisibleInAuto(highest: AgentState): boolean {
+/** In "auto" display mode, the cards are shown unless everything is done. */
+export function isVisibleInAuto(highest: AgentState): boolean {
   return highest !== "done";
 }

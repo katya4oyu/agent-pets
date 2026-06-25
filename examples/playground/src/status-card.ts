@@ -1,4 +1,4 @@
-// navi 固有 UI（吹き出しスタック・ソースバッジ・トグル/セッションカウント）の
+// navi 固有 UI（ステータススタック・ソースバッジ・トグル/セッションカウント）の
 // playground ローカル実装。
 //
 // codex-pet（スプライト描画 = `@navi/ui`）とは出自が異なる navi 固有の表現要件
@@ -21,7 +21,7 @@ export interface SessionData {
   id: string;
   source: SourceId;
   state: AgentState;
-  /** 吹き出しの見出し（エージェント名やセッション名）。 */
+  /** ステータスカードの見出し（エージェント名やセッション名）。 */
   label: string;
   /** 任意の本文。無ければ state ラベルにフォールバック。 */
   message?: string;
@@ -70,18 +70,18 @@ export function highestPriorityState(states: Iterable<AgentState>): AgentState {
   return best;
 }
 
-export function bubbleMessage(session: SessionData): string {
+export function cardMessage(session: SessionData): string {
   return session.message?.trim() ? session.message : stateLabels[session.state];
 }
 
-export function bubbleDir(session: SessionData): string | null {
+export function cardDir(session: SessionData): string | null {
   return (
     session.project ??
     (session.cwd ? session.cwd.split("/").filter(Boolean).at(-1) ?? null : null)
   );
 }
 
-export function isSpeechVisibleInAuto(highest: AgentState): boolean {
+export function isVisibleInAuto(highest: AgentState): boolean {
   return highest !== "done";
 }
 
@@ -108,47 +108,47 @@ export const sourceConfig: Record<SourceId, SourceConfig> = {
   copilot: { label: "Copilot", color: "#6F42C1", svg: copilotSvg },
 };
 
-// ── 吹き出し DOM（app/src/main.ts の createBubbleElement と同構造） ──
+// ── ステータスカード DOM（app/src/main.ts の createStatusCard と同構造） ──
 
-export interface BubbleCallbacks {
+export interface StatusCardCallbacks {
   onClose: (id: string) => void;
 }
 
-export function createBubble(session: SessionData, cb: BubbleCallbacks): HTMLElement {
-  const bubble = document.createElement("div");
-  bubble.className = "speech";
-  bubble.dataset.id = session.id;
-  bubble.innerHTML = `
-    <button class="speech-close" type="button" aria-label="Remove session">×</button>
+export function createStatusCard(session: SessionData, cb: StatusCardCallbacks): HTMLElement {
+  const card = document.createElement("div");
+  card.className = "status-card";
+  card.dataset.id = session.id;
+  card.innerHTML = `
+    <button class="status-card-close" type="button" aria-label="Remove session">×</button>
     <div class="source-badge" aria-label="Source agent"></div>
-    <p class="speech-title"></p>
+    <p class="status-card-title"></p>
     <p class="message"></p>
     <p class="cwd-label" hidden></p>
-    <span class="speech-tail" aria-hidden="true"></span>
+    <span class="status-card-tail" aria-hidden="true"></span>
   `;
-  bubble
-    .querySelector<HTMLButtonElement>(".speech-close")
+  card
+    .querySelector<HTMLButtonElement>(".status-card-close")
     ?.addEventListener("click", (e) => {
       e.stopPropagation();
       cb.onClose(session.id);
     });
-  updateBubble(bubble, session);
-  return bubble;
+  updateStatusCard(card, session);
+  return card;
 }
 
-export function updateBubble(bubble: HTMLElement, session: SessionData): void {
-  bubble.dataset.state = session.state;
-  bubble.dataset.source = session.source;
+export function updateStatusCard(card: HTMLElement, session: SessionData): void {
+  card.dataset.state = session.state;
+  card.dataset.source = session.source;
 
-  const title = bubble.querySelector<HTMLParagraphElement>(".speech-title");
-  const msg = bubble.querySelector<HTMLParagraphElement>(".message");
-  const cwdLabel = bubble.querySelector<HTMLParagraphElement>(".cwd-label");
-  const sourceBadge = bubble.querySelector<HTMLDivElement>(".source-badge");
+  const title = card.querySelector<HTMLParagraphElement>(".status-card-title");
+  const msg = card.querySelector<HTMLParagraphElement>(".message");
+  const cwdLabel = card.querySelector<HTMLParagraphElement>(".cwd-label");
+  const sourceBadge = card.querySelector<HTMLDivElement>(".source-badge");
 
   if (title) title.textContent = session.label;
-  if (msg) msg.textContent = bubbleMessage(session);
+  if (msg) msg.textContent = cardMessage(session);
 
-  const dir = bubbleDir(session);
+  const dir = cardDir(session);
   if (cwdLabel) {
     cwdLabel.textContent = dir ?? "";
     cwdLabel.hidden = !dir;

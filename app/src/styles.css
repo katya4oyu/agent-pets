@@ -34,17 +34,17 @@ button {
   width: 100vw;
   height: 100vh;
   --pet-size: 128px;
-  --bubble-width: 266px;
+  --card-width: 266px;
 }
 
-/* ── Speech stack (positions the column of bubbles) ── */
+/* ── Status stack (positions the column of cards) ── */
 
-.speech-stack {
+.status-stack {
   position: absolute;
   right: 26px;
   bottom: calc(18px + var(--pet-size) * 1.083333 + 8px);
   z-index: 1;
-  width: var(--bubble-width);
+  width: var(--card-width);
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -58,25 +58,25 @@ button {
     visibility 120ms ease;
 }
 
-.speech-stack::-webkit-scrollbar {
+.status-stack::-webkit-scrollbar {
   width: 4px;
 }
 
-.speech-stack::-webkit-scrollbar-thumb {
+.status-stack::-webkit-scrollbar-thumb {
   background: rgba(29, 36, 51, 0.18);
   border-radius: 2px;
 }
 
-.speech-hidden .speech-stack {
+.status-hidden .status-stack {
   visibility: hidden;
   opacity: 0;
   pointer-events: none;
   transform: translateY(8px) scale(0.98);
 }
 
-/* ── Individual speech bubble ── */
+/* ── Individual status card ── */
 
-.speech {
+.status-card {
   position: relative;
   overflow: hidden;
   padding: 9px 10px;
@@ -88,7 +88,7 @@ button {
   user-select: none;
 }
 
-.speech-title {
+.status-card-title {
   margin: 0;
   overflow: hidden;
   color: #10131c;
@@ -99,7 +99,7 @@ button {
   text-overflow: ellipsis;
 }
 
-.speech-close {
+.status-card-close {
   opacity: 0;
   pointer-events: none;
   transition:
@@ -107,12 +107,12 @@ button {
     transform 100ms ease;
 }
 
-.speech:hover .speech-close {
+.status-card:hover .status-card-close {
   opacity: 1;
   pointer-events: auto;
 }
 
-.speech-close {
+.status-card-close {
   position: absolute;
   top: 6px;
   left: 8px;
@@ -201,10 +201,10 @@ button {
   pointer-events: none;
 }
 
-.speech[data-state="thinking"] .source-badge::after,
-.speech[data-state="running"] .source-badge::after,
-.speech[data-state="editing"] .source-badge::after,
-.speech[data-state="waiting_approval"] .source-badge::after {
+.status-card[data-state="thinking"] .source-badge::after,
+.status-card[data-state="running"] .source-badge::after,
+.status-card[data-state="editing"] .source-badge::after,
+.status-card[data-state="waiting_approval"] .source-badge::after {
   animation: badge-shine 2s ease-in-out infinite;
 }
 
@@ -252,7 +252,7 @@ button {
 
 /* ── Toggle button ── */
 
-.bubble-toggle {
+.status-toggle {
   position: absolute;
   top: 0;
   right: 0;
@@ -276,7 +276,7 @@ button {
   transform: translateY(-2px) rotate(45deg);
 }
 
-.speech-hidden .toggle-chevron {
+.status-hidden .toggle-chevron {
   transform: translateY(2px) rotate(225deg);
 }
 
@@ -288,15 +288,15 @@ button {
   line-height: 1;
 }
 
-.speech-hidden .bubble-toggle {
+.status-hidden .status-toggle {
   background: #16a34a;
 }
 
-.speech-hidden .toggle-chevron {
+.status-hidden .toggle-chevron {
   display: none;
 }
 
-.speech-hidden .session-count {
+.status-hidden .session-count {
   display: flex;
 }
 

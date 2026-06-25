@@ -46,17 +46,17 @@ button {
   --pet-size: 128px;
   --pet-h: calc(var(--pet-size) * 208 / 192);
   --stage-pad: 28px;
-  --bubble-width: 266px;
-  --bubble-pad-x: 10px;
-  --bubble-pad-y: 9px;
-  --bubble-radius: 12px;
-  --bubble-gap: 6px;
-  --bubble-offset-x: 8px;
-  --bubble-offset-y: 8px;
-  --bubble-shadow-y: 8px;
-  --bubble-shadow-blur: 22px;
-  --bubble-shadow-alpha: 0.18;
-  --bubble-max-visible: 3;
+  --card-width: 266px;
+  --card-pad-x: 10px;
+  --card-pad-y: 9px;
+  --card-radius: 12px;
+  --card-gap: 6px;
+  --card-offset-x: 8px;
+  --card-offset-y: 8px;
+  --card-shadow-y: 8px;
+  --card-shadow-blur: 22px;
+  --card-shadow-alpha: 0.18;
+  --card-max-visible: 3;
   --src-claude-code: #cc785c;
   --src-codex: #10a37f;
   --src-copilot: #6f42c1;
@@ -77,22 +77,22 @@ button {
   display: block;
 }
 
-/* ── Bubble stack ── */
+/* ── Status stack ── */
 
-.navi-bubbles {
+.status-stack {
   position: absolute;
   /* offset-x は「pet の右マージンからの追加オフセット」（パネルのラベルどおり） */
-  right: calc(var(--stage-pad) + var(--bubble-offset-x));
-  bottom: calc(var(--stage-pad) + var(--pet-h) + var(--bubble-offset-y));
-  width: var(--bubble-width);
+  right: calc(var(--stage-pad) + var(--card-offset-x));
+  bottom: calc(var(--stage-pad) + var(--pet-h) + var(--card-offset-y));
+  width: var(--card-width);
   display: flex;
   flex-direction: column;
-  gap: var(--bubble-gap);
+  gap: var(--card-gap);
   /* 最大表示件数で頭打ちにしつつ、ステージの空き高さも超えない（超過分はステージ上端で
      切れずに内部スクロールへ）。100% = navi-shell の高さ = ステージ高。 */
   max-height: min(
-    calc(var(--bubble-max-visible) * 112px),
-    calc(100% - var(--stage-pad) - var(--pet-h) - var(--bubble-offset-y) - 10px)
+    calc(var(--card-max-visible) * 112px),
+    calc(100% - var(--stage-pad) - var(--pet-h) - var(--card-offset-y) - 10px)
   );
   overflow-y: auto;
   scrollbar-width: thin;
@@ -100,39 +100,39 @@ button {
   transition: opacity 120ms ease, transform 120ms ease, visibility 120ms ease;
 }
 
-.navi-bubbles::-webkit-scrollbar {
+.status-stack::-webkit-scrollbar {
   width: 4px;
 }
 
-.navi-bubbles::-webkit-scrollbar-thumb {
+.status-stack::-webkit-scrollbar-thumb {
   background: rgba(29, 36, 51, 0.18);
   border-radius: 2px;
 }
 
-.speech-hidden .navi-bubbles {
+.status-hidden .status-stack {
   visibility: hidden;
   opacity: 0;
   pointer-events: none;
   transform: translateY(8px) scale(0.98);
 }
 
-/* ── Individual bubble ── */
+/* ── Individual status card ── */
 
-.speech {
+.status-card {
   position: relative;
-  padding: var(--bubble-pad-y) var(--bubble-pad-x);
+  padding: var(--card-pad-y) var(--card-pad-x);
   border: none;
-  border-radius: var(--bubble-radius);
+  border-radius: var(--card-radius);
   background: #fff;
   box-shadow:
-    0 var(--bubble-shadow-y) var(--bubble-shadow-blur)
-      rgba(16, 19, 28, var(--bubble-shadow-alpha)),
+    0 var(--card-shadow-y) var(--card-shadow-blur)
+      rgba(16, 19, 28, var(--card-shadow-alpha)),
     inset 0 0 0 1.2px rgba(29, 36, 51, 0.1);
   cursor: grab;
   user-select: none;
 }
 
-.speech-title {
+.status-card-title {
   margin: 0;
   padding-right: 26px;
   overflow: hidden;
@@ -167,7 +167,7 @@ button {
   text-overflow: ellipsis;
 }
 
-.speech-close {
+.status-card-close {
   position: absolute;
   top: 6px;
   left: 8px;
@@ -187,7 +187,7 @@ button {
   transition: opacity 100ms ease;
 }
 
-.speech:hover .speech-close {
+.status-card:hover .status-card-close {
   opacity: 1;
   pointer-events: auto;
 }
@@ -236,10 +236,10 @@ button {
   pointer-events: none;
 }
 
-.speech[data-state="thinking"] .source-badge::after,
-.speech[data-state="running"] .source-badge::after,
-.speech[data-state="editing"] .source-badge::after,
-.speech[data-state="waiting_approval"] .source-badge::after {
+.status-card[data-state="thinking"] .source-badge::after,
+.status-card[data-state="running"] .source-badge::after,
+.status-card[data-state="editing"] .source-badge::after,
+.status-card[data-state="waiting_approval"] .source-badge::after {
   animation: badge-shine 2s ease-in-out infinite;
 }
 
@@ -254,11 +254,11 @@ button {
 
 /* ── Tail ── */
 
-.speech-tail {
+.status-card-tail {
   display: none;
 }
 
-.has-tail .speech:last-child .speech-tail {
+.has-tail .status-card:last-child .status-card-tail {
   display: block;
   position: absolute;
   right: 22px;
@@ -273,7 +273,7 @@ button {
 
 /* ── state accent (left edge) ── */
 
-.speech::before {
+.status-card::before {
   content: "";
   position: absolute;
   left: 0;
@@ -284,24 +284,24 @@ button {
   background: transparent;
 }
 
-.speech[data-state="error"]::before {
+.status-card[data-state="error"]::before {
   background: #e5484d;
 }
-.speech[data-state="waiting_approval"]::before {
+.status-card[data-state="waiting_approval"]::before {
   background: #f5a623;
 }
-.speech[data-state="running"]::before,
-.speech[data-state="thinking"]::before,
-.speech[data-state="editing"]::before {
+.status-card[data-state="running"]::before,
+.status-card[data-state="thinking"]::before,
+.status-card[data-state="editing"]::before {
   background: #3b82f6;
 }
-.speech[data-state="done"]::before {
+.status-card[data-state="done"]::before {
   background: #16a34a;
 }
 
 /* ── Toggle + session count ── */
 
-.bubble-toggle {
+.status-toggle {
   position: absolute;
   top: -2px;
   right: -2px;
@@ -332,13 +332,13 @@ button {
   line-height: 1;
 }
 
-.speech-hidden .bubble-toggle {
+.status-hidden .status-toggle {
   background: #16a34a;
 }
-.speech-hidden .toggle-chevron {
+.status-hidden .toggle-chevron {
   display: none;
 }
-.speech-hidden .session-count {
+.status-hidden .session-count {
   display: flex;
 }
 
