@@ -342,6 +342,33 @@ button {
   display: flex;
 }
 
+/* ── UI 名ラベル（glossary の正式名オーバーレイ） ── */
+
+.pg-ui-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+}
+
+.ui-name-pill {
+  position: absolute;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: #c026d3;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.5;
+  white-space: nowrap;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+
+.ui-named {
+  outline: 1.5px dashed #c026d3 !important;
+  outline-offset: 2px;
+}
+
 /* ── current-animation debug badge ── */
 
 .pg-anim-badge {

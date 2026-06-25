@@ -69,6 +69,9 @@ let seq = 0;
 const sessions = new Map<string, SessionData>();
 const bubbles = new Map<string, HTMLElement>();
 
+// UI 名ラベル（glossary の正式名をステージ上に重ねるデバッグ表示）の ON/OFF。
+let uiNames = false;
+
 const sampleMessages: Record<SourceId, string> = {
   "claude-code": "Editing src/state.ts — adding the priority table",
   codex: "Waiting for approval to run `cargo test`",
@@ -139,6 +142,11 @@ const sessionCountEl = root.querySelector<HTMLElement>(".session-count")!;
 const controlsEl = root.querySelector<HTMLElement>(".pg-controls")!;
 const readoutCode = root.querySelector<HTMLElement>(".pg-readout-body code")!;
 const copyBtn = root.querySelector<HTMLButtonElement>(".pg-copy")!;
+
+// UI 名ラベルを描く透明オーバーレイ層（ステージに重ねる・操作は透過）。
+const uiOverlay = document.createElement("div");
+uiOverlay.className = "pg-ui-overlay";
+stage.appendChild(uiOverlay);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // コントロール用の小さなビルダー群
@@ -299,6 +307,7 @@ function apply(): void {
   );
 
   refreshReadout();
+  refreshUiNames();
 }
 
 function refreshReadout(): void {
@@ -323,6 +332,89 @@ function refreshReadout(): void {
     `/* pet fps: ${params.fps > 0 ? params.fps : "pet.json default"} · speech-mode: ${params.speechMode} */`,
   ];
   readoutCode.textContent = lines.join("\n");
+}
+
+// glossary（docs/glossary.md）の正式名をステージ上の各部品へ重ねるデバッグ表示。
+// 名前は glossary §1 と一致させること。
+function refreshUiNames(): void {
+  uiOverlay.replaceChildren();
+  for (const el of stage.querySelectorAll(".ui-named")) el.classList.remove("ui-named");
+  if (!uiNames) return;
+
+  const stageRect = stage.getBoundingClientRect();
+  const placed: { x: number; y: number; w: number; h: number }[] = [];
+  const overlaps = (a: { x: number; y: number; w: number; h: number }): boolean =>
+    placed.some(
+      (b) =>
+        !(a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y),
+    );
+  const place = (
+    el: Element | null | undefined,
+    name: string,
+    side: "left" | "right" | "top" | "bottom",
+  ): void => {
+    if (!el) return;
+    const target = el as HTMLElement;
+    if (getComputedStyle(target).display === "none") return;
+    const r = target.getBoundingClientRect();
+    if (r.width === 0 || r.height === 0) return;
+
+    const pill = document.createElement("div");
+    pill.className = "ui-name-pill";
+    pill.textContent = name;
+    uiOverlay.appendChild(pill);
+
+    const pw = pill.offsetWidth;
+    const ph = pill.offsetHeight;
+    const ex = r.left - stageRect.left;
+    const ey = r.top - stageRect.top;
+    let x = 0;
+    let y = 0;
+    if (side === "left") {
+      x = ex - pw - 6;
+      y = ey + r.height / 2 - ph / 2;
+    } else if (side === "right") {
+      x = ex + r.width + 6;
+      y = ey + r.height / 2 - ph / 2;
+    } else if (side === "top") {
+      x = ex + r.width / 2 - pw / 2;
+      y = ey - ph - 6;
+    } else {
+      x = ex + r.width / 2 - pw / 2;
+      y = ey + r.height + 6;
+    }
+    // ステージ内へクランプ（はみ出して切れないように）
+    x = Math.max(2, Math.min(x, stageRect.width - pw - 2));
+    y = Math.max(2, Math.min(y, stageRect.height - ph - 2));
+    // 既存ラベルと重なるなら縦にずらす（近接部品＝尻尾／表示トグル等の衝突回避）
+    const step = ph + 3;
+    for (const off of [0, step, -step, 2 * step, -2 * step, 3 * step, -3 * step]) {
+      const cand = Math.max(2, Math.min(y + off, stageRect.height - ph - 2));
+      y = cand;
+      if (!overlaps({ x, y, w: pw, h: ph })) break;
+    }
+    placed.push({ x, y, w: pw, h: ph });
+    pill.style.left = `${x}px`;
+    pill.style.top = `${y}px`;
+    target.classList.add("ui-named");
+  };
+
+  // 常に見える部品
+  place(pet, "アバター", "left");
+  place(toggleBtn, "表示トグル", "right");
+  if (getComputedStyle(sessionCountEl).display !== "none") {
+    place(sessionCountEl, "セッションカウント", "right");
+  }
+
+  // スタックが見えているときだけ、その内側の部品を案内
+  if (!shell.classList.contains("speech-hidden")) {
+    place(bubblesEl, "ステータススタック", "top");
+    const cards = bubblesEl.querySelectorAll(".speech");
+    const lastCard = cards[cards.length - 1] as HTMLElement | undefined;
+    place(lastCard, "ステータスカード", "left");
+    place(lastCard?.querySelector(".source-badge"), "ソースバッジ", "right");
+    place(lastCard?.querySelector(".speech-tail"), "尻尾", "bottom");
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -640,6 +732,15 @@ function button(label: string, onClick: () => void): HTMLButtonElement {
   });
 }
 
+// Debug
+{
+  const body = group("Debug");
+  toggle(body, "UI 名ラベル (show UI names)", uiNames, (v) => {
+    uiNames = v;
+    refreshUiNames();
+  });
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // shell 内のトグル / コピー
 // ─────────────────────────────────────────────────────────────────────────────
@@ -669,6 +770,10 @@ const observer = new MutationObserver(() => {
   animBadge.textContent = `${getHighestState()} → ${pet.getAttribute("current-animation") ?? "–"}`;
 });
 observer.observe(pet, { attributes: true, attributeFilter: ["current-animation"] });
+
+// UI 名ラベルはステージ上の実位置に追従させる（スクロール / リサイズで再計算）。
+bubblesEl.addEventListener("scroll", refreshUiNames);
+window.addEventListener("resize", refreshUiNames);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 初期セッション
