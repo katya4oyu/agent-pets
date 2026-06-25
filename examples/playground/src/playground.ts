@@ -605,7 +605,7 @@ function refreshUiNames(): void {
     const cards = stackEl.querySelectorAll(".status-card");
     const lastCard = cards[cards.length - 1] as HTMLElement | undefined;
     place(lastCard, "ステータスカード", "left");
-    place(lastCard?.querySelector(".source-badge"), "ソースバッジ", "right");
+    place(lastCard?.querySelector(".source-badge"), "ソースバッジ", "left");
     place(lastCard?.querySelector(".status-card-tail"), "尻尾", "bottom");
   }
 }
