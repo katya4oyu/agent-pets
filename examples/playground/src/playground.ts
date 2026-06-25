@@ -41,7 +41,6 @@ interface Params {
   shadowBlur: number;
   shadowAlpha: number;
   maxVisible: number;
-  tail: boolean;
   fps: number; // 0 = pet.json 既定
   displayMode: DisplayMode;
   motion: boolean; // ステータスカードのマイクロモーション ON/OFF
@@ -61,7 +60,6 @@ const params: Params = {
   shadowBlur: 22,
   shadowAlpha: 0.18,
   maxVisible: 3,
-  tail: true,
   fps: 0,
   displayMode: "show",
   motion: true,
@@ -477,8 +475,6 @@ function apply(): void {
   s.setProperty("--src-codex", params.colors.codex);
   s.setProperty("--src-copilot", params.colors.copilot);
 
-  shell.classList.toggle("has-tail", params.tail);
-
   if (params.fps > 0) pet.setAttribute("fps", String(params.fps));
   else pet.removeAttribute("fps");
 
@@ -516,7 +512,6 @@ function refreshReadout(): void {
     `  --card-offset-y: ${params.cardOffsetY}px;`,
     `  --card-shadow: 0 ${params.shadowY}px ${params.shadowBlur}px rgba(16, 19, 28, ${params.shadowAlpha});`,
     `  --card-max-visible: ${params.maxVisible};`,
-    `  --card-tail: ${params.tail ? "on" : "off"};`,
     `  --src-claude-code: ${params.colors["claude-code"]};`,
     `  --src-codex: ${params.colors.codex};`,
     `  --src-copilot: ${params.colors.copilot};`,
@@ -579,7 +574,7 @@ function refreshUiNames(): void {
     // ステージ内へクランプ（はみ出して切れないように）
     x = Math.max(2, Math.min(x, stageRect.width - pw - 2));
     y = Math.max(2, Math.min(y, stageRect.height - ph - 2));
-    // 既存ラベルと重なるなら縦にずらす（近接部品＝尻尾／表示トグル等の衝突回避）
+    // 既存ラベルと重なるなら縦にずらす（近接部品＝表示トグル等の衝突回避）
     const step = ph + 3;
     for (const off of [0, step, -step, 2 * step, -2 * step, 3 * step, -3 * step]) {
       const cand = Math.max(2, Math.min(y + off, stageRect.height - ph - 2));
@@ -606,7 +601,6 @@ function refreshUiNames(): void {
     const lastCard = cards[cards.length - 1] as HTMLElement | undefined;
     place(lastCard, "ステータスカード", "left");
     place(lastCard?.querySelector(".source-badge"), "ソースバッジ", "left");
-    place(lastCard?.querySelector(".status-card-tail"), "尻尾", "bottom");
   }
 }
 
@@ -941,10 +935,6 @@ function button(label: string, onClick: () => void): HTMLButtonElement {
       params.shadowAlpha = v;
       apply();
     },
-  });
-  toggle(body, "Tail", params.tail, (v) => {
-    params.tail = v;
-    apply();
   });
 }
 

@@ -19,7 +19,6 @@
 | **ステータスカード** (status card) | **1 エージェント・セッションの現在状態を表す 1 枚**。source / state / タイトル / message / cwd を含む。セッションが続く限り残り、その場で更新される。 | DOM/ロジック=**`@navi/ui`**（`packages/ui/src/navi/status-card.ts` の `createStatusCard` / `updateStatusCard`）。CSS は app/playground 各自の `.status-card`。app シェルの載せ替え=`mountStatusCard`（`app/src/main.ts`） | **吹き出し**, speech bubble, bubble, speech（いずれも旧称） | セリフ／チャット発言ではない。トーストでもない（→ §4） |
 | **ステータススタック** (status stack) | ステータスカードを縦に積む列。**最大 3 枚、超過はスクロール**（`issues/b3f2a1`）。 | `.status-stack`（app / playground 各自の CSS） | 吹き出しスタック, `.speech-stack`, `.navi-bubbles`（旧称） | — |
 | **ソースバッジ** (source badge) | カード上の、どのエージェント由来かを示すロゴ。`@lobehub/icons-static-svg` の実ロゴを `currentColor` で着色。 | `.source-badge`, `sourceConfig`（**`@navi/ui`** = `packages/ui/src/navi/source-badge.ts`） | バッジ | — |
-| **尻尾** (tail) | ステータスカードがアバターを指す三角の突起（callout のポインタ）。 | `.status-card-tail`（playground。app には未実装） | しっぽ, pointer, `.speech-tail`（旧称） | — |
 | **セッションカウント** (session count) | アクティブなセッション数。スタック非表示時にトグル上へ出る。 | `.session-count` | カウント | 通知バッジ（未読数）ではない |
 | **表示トグル** (toggle) | スタックの表示/非表示を切り替えるボタン。 | `.status-toggle` | トグル, `.bubble-toggle`（旧称） | — |
 | **リサイズハンドル** (resize handle) | アバターのサイズ変更つまみ（右下）。 | `.resize-handle` | — | — |
@@ -73,7 +72,7 @@
 |---|---|---|---|
 | **ステータス表示 / Live Activity** | **状態駆動・連続**（「今こうである」をその場で更新、セッション終了で消える） | iOS Live Activity / Dynamic Island | **ステータスカードはこれ。** |
 | トースト / 通知 (toast / notification) | **イベント駆動・離散**（「起きた」を点で知らせる） | macOS の Notification（Banner=一時 / Alert=永続） | 似て非なる。例外的に **アテンション（waiting_approval / error）だけ**が通知に相当 |
-| callout / 吹き出し (speech balloon) | 形態の話（要素にアンカー＋尻尾） | ツールチップの親戚 | ステータスカードは callout **形態**を借りているが、中身は状態表示 |
+| callout / 吹き出し (speech balloon) | 形態の話（要素にアンカー＋尻尾） | ツールチップの親戚 | ステータスカードはアバターにアンカーする callout **形態**を借りるが、尻尾は廃止済み。中身は状態表示 |
 | 発話 / チャット (speech / chat) | キャラの発言 | 会話 UI | **無関係**。アバターは喋らない（→ ペット発話 `say()` は別物） |
 
 要点: **ステータスカード = アバターにアンカーした、セッション状態の Live Activity 表示**。「吹き出し」は通称、「トースト」は近縁だが別、「発話」は誤り。

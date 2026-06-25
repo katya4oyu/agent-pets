@@ -130,7 +130,7 @@ button {
 }
 .anchor-v-top .status-stack {
   /* pet の下に積む。上端を pet 下端に合わせ、下方向へ伸びる。column-reverse で
-     新しいカード（DOM 末尾）が pet 寄り＝上端に来る → 尻尾は常に :last-child。 */
+     新しいカード（DOM 末尾）が pet 寄り＝上端に来る。 */
   top: calc(var(--pet-bottom) + var(--card-offset-y));
   bottom: auto;
   flex-direction: column-reverse;
@@ -295,45 +295,6 @@ button {
   to {
     transform: translateX(400%) skewX(-15deg);
   }
-}
-
-/* ── Tail ── */
-
-.status-card-tail {
-  display: none;
-}
-
-/* 尻尾は常に pet に最も近いカード（:last-child。top アンカー時は column-reverse で
-   視覚的に先頭）に出し、アンカーに応じて指す向き・左右位置を反転する。 */
-.has-tail .status-card:last-child .status-card-tail {
-  display: block;
-  position: absolute;
-  width: 12px;
-  height: 12px;
-  background: #fff;
-  box-shadow: inset 0 0 0 1.2px rgba(29, 36, 51, 0.1);
-}
-
-/* 垂直の向き */
-.anchor-v-bottom .has-tail .status-card:last-child .status-card-tail {
-  bottom: -6px;
-  clip-path: polygon(0 0, 100% 0, 100% 100%);
-  transform: rotate(45deg);
-}
-.anchor-v-top .has-tail .status-card:last-child .status-card-tail {
-  top: -6px;
-  clip-path: polygon(0 0, 100% 0, 100% 100%);
-  transform: rotate(225deg);
-}
-
-/* 水平位置（pet 寄りの端へ） */
-.anchor-h-right .has-tail .status-card:last-child .status-card-tail {
-  right: 22px;
-  left: auto;
-}
-.anchor-h-left .has-tail .status-card:last-child .status-card-tail {
-  left: 22px;
-  right: auto;
 }
 
 /* ── state accent (left edge) ── */

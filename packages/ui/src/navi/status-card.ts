@@ -26,7 +26,6 @@ export function createStatusCard(
     <p class="status-card-title"></p>
     <p class="message"></p>
     <p class="cwd-label" hidden></p>
-    <span class="status-card-tail" aria-hidden="true"></span>
   `;
   card
     .querySelector<HTMLButtonElement>(".status-card-close")
