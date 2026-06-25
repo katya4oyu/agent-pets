@@ -1,5 +1,6 @@
 import "@navi/ui";
 import "./playground.css";
+import { animate } from "motion";
 import {
   type AgentState,
   type SourceId,
@@ -43,6 +44,7 @@ interface Params {
   tail: boolean;
   fps: number; // 0 = pet.json 既定
   displayMode: DisplayMode;
+  motion: boolean; // ステータスカードのマイクロモーション ON/OFF
   colors: Record<SourceId, string>;
 }
 
@@ -62,6 +64,7 @@ const params: Params = {
   tail: true,
   fps: 0,
   displayMode: "show",
+  motion: true,
   colors: {
     "claude-code": sourceConfig["claude-code"].color,
     codex: sourceConfig.codex.color,
@@ -153,6 +156,190 @@ const copyBtn = root.querySelector<HTMLButtonElement>(".pg-copy")!;
 const uiOverlay = document.createElement("div");
 uiOverlay.className = "pg-ui-overlay";
 stage.appendChild(uiOverlay);
+
+const petWrap = root.querySelector<HTMLElement>(".navi-pet-wrap")!;
+
+// 「アバターをドラッグできる」ことの案内（最初のドラッグで消える）。
+const dragHint = document.createElement("div");
+dragHint.className = "pg-drag-hint";
+dragHint.textContent = "アバターをドラッグ → スタックが向きを変えて追従";
+stage.appendChild(dragHint);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// マイクロモーション（motion）＋ アバター位置に追従するレイアウト
+//
+// アバターはドラッグでステージ（＝デスクトップ）上のどこへでも動かせる。スタックは
+// アバターの四象限（左右 × 上下）に応じて、はみ出さない側へ展開する。象限をまたいだ
+// 瞬間や、カードの追加・削除時は FLIP で滑らかに整列し直す。`status-card.ts` は
+// 「props in / DOM out」のダム部品のままなので、これらの演出は consumer 側に置く。
+// ─────────────────────────────────────────────────────────────────────────────
+
+// アバター左上のステージ内座標（px）。drag が書き込み、CSS 変数 --pet-x/-y に反映。
+let petX = 0;
+let petY = 0;
+const EDGE = 12; // ステージ端からの最小すきま
+
+// reduced-motion を尊重。OS 設定で無効、または Motion トグル OFF なら一切動かさない。
+const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+function motionOn(): boolean {
+  return params.motion && !reduceMotion.matches;
+}
+
+const ENTER_SPRING = { type: "spring", stiffness: 560, damping: 30, mass: 0.9 } as const;
+const FLIP_SPRING = { type: "spring", stiffness: 650, damping: 38, mass: 0.9 } as const;
+
+type Anchor = { h: "left" | "right"; v: "top" | "bottom" };
+
+function petBox(): { w: number; h: number } {
+  const w = params.petSize;
+  return { w, h: (w * 208) / 192 };
+}
+
+// pet 中心がステージのどの象限にあるか → スタックの展開方向。
+function currentAnchor(): Anchor {
+  const stageRect = stage.getBoundingClientRect();
+  const { w, h } = petBox();
+  const cx = petX + w / 2;
+  const cy = petY + h / 2;
+  return {
+    h: cx < stageRect.width / 2 ? "left" : "right",
+    v: cy < stageRect.height / 2 ? "top" : "bottom",
+  };
+}
+
+function clampPet(): void {
+  const stageRect = stage.getBoundingClientRect();
+  const { w, h } = petBox();
+  petX = Math.max(EDGE, Math.min(petX, stageRect.width - w - EDGE));
+  petY = Math.max(EDGE, Math.min(petY, stageRect.height - h - EDGE));
+}
+
+function applyPetPosition(): void {
+  shell.style.setProperty("--pet-x", `${petX}px`);
+  shell.style.setProperty("--pet-y", `${petY}px`);
+}
+
+// 現在見えているカードの位置を記録（FLIP の First）。
+function captureCardRects(): Map<string, DOMRect> {
+  const m = new Map<string, DOMRect>();
+  for (const [id, el] of cards) m.set(id, el.getBoundingClientRect());
+  return m;
+}
+
+// 記録位置から現在位置への差分を打ち消すように動かす（FLIP の Invert→Play）。
+// skip の id（新規カードなど）は対象外。
+function flipReflow(before: Map<string, DOMRect>, skip?: Set<string>): void {
+  if (!motionOn()) return;
+  for (const [id, el] of cards) {
+    if (skip?.has(id)) continue;
+    const prev = before.get(id);
+    if (!prev) continue;
+    const now = el.getBoundingClientRect();
+    const dx = prev.left - now.left;
+    const dy = prev.top - now.top;
+    if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) continue;
+    animate(el, { x: [dx, 0], y: [dy, 0] }, FLIP_SPRING);
+  }
+}
+
+// 新規カードの登場（pet 側からせり出してスプリングで着地）。
+function animateCardIn(el: HTMLElement): void {
+  if (!motionOn()) return;
+  const fromY = currentAnchor().v === "bottom" ? 10 : -10;
+  animate(el, { opacity: [0, 1], y: [fromY, 0], scale: [0.94, 1] }, ENTER_SPRING);
+}
+
+// カードの退場（その場でフェード＆縮小）。完了を待てるよう Promise を返す。
+async function animateCardOut(el: HTMLElement): Promise<void> {
+  if (!motionOn()) return;
+  const toY = currentAnchor().v === "bottom" ? 8 : -8;
+  await animate(
+    el,
+    { opacity: [1, 0], y: [0, toY], scale: [1, 0.92] },
+    { duration: 0.16, ease: "easeIn" },
+  ).finished;
+}
+
+// アンカー（象限）クラスを反映。変化時は FLIP で整列し直す。
+function applyAnchor(): void {
+  const a = currentAnchor();
+  const hClass = `anchor-h-${a.h}`;
+  const vClass = `anchor-v-${a.v}`;
+  const changed =
+    !shell.classList.contains(hClass) || !shell.classList.contains(vClass);
+  const before = changed ? captureCardRects() : null;
+  shell.classList.remove(
+    "anchor-h-left",
+    "anchor-h-right",
+    "anchor-v-top",
+    "anchor-v-bottom",
+  );
+  shell.classList.add(hClass, vClass);
+  if (before) flipReflow(before);
+}
+
+// 右下（従来の見え方）に初期配置。stage 実寸が要るので mount 後に呼ぶ。
+function placePetInitial(): void {
+  const stageRect = stage.getBoundingClientRect();
+  const { w, h } = petBox();
+  const pad = 28; // --stage-pad 相当
+  petX = stageRect.width - w - pad;
+  petY = stageRect.height - h - pad;
+  clampPet();
+  applyPetPosition();
+  applyAnchor();
+}
+
+// pet サイズ変更・ウィンドウリサイズ後に内側へクランプし直す。
+function reclampPet(): void {
+  clampPet();
+  applyPetPosition();
+  applyAnchor();
+  refreshUiNames();
+}
+
+// ── pet drag（ステージ＝デスクトップ上を移動） ──
+// 埋め込み navi-pet は自前で pointer capture するが embedded では自分は動かない。
+// pointerdown は wrap まで伝播するのでここで拾い、drag 中は window で move/up を追う
+// （navi-pet と同方式・capture 中も window はイベントを受ける）。
+let dragging = false;
+let dragOriginX = 0;
+let dragOriginY = 0;
+let petOriginX = 0;
+let petOriginY = 0;
+
+petWrap.addEventListener("pointerdown", (e) => {
+  if (e.button !== 0) return;
+  if ((e.target as HTMLElement).closest(".status-toggle")) return; // トグルは別操作
+  dragging = true;
+  dragOriginX = e.clientX;
+  dragOriginY = e.clientY;
+  petOriginX = petX;
+  petOriginY = petY;
+  petWrap.classList.add("dragging");
+  dragHint.remove();
+  window.addEventListener("pointermove", onDragMove);
+  window.addEventListener("pointerup", onDragEnd);
+  window.addEventListener("pointercancel", onDragEnd);
+});
+
+function onDragMove(e: PointerEvent): void {
+  if (!dragging) return;
+  petX = petOriginX + (e.clientX - dragOriginX);
+  petY = petOriginY + (e.clientY - dragOriginY);
+  clampPet();
+  applyPetPosition();
+  applyAnchor();
+  refreshUiNames();
+}
+
+function onDragEnd(): void {
+  dragging = false;
+  petWrap.classList.remove("dragging");
+  window.removeEventListener("pointermove", onDragMove);
+  window.removeEventListener("pointerup", onDragEnd);
+  window.removeEventListener("pointercancel", onDragEnd);
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // コントロール用の小さなビルダー群
@@ -335,7 +522,7 @@ function refreshReadout(): void {
     `  --src-copilot: ${params.colors.copilot};`,
     "}",
     "",
-    `/* pet fps: ${params.fps > 0 ? params.fps : "pet.json default"} · display-mode: ${params.displayMode} */`,
+    `/* pet fps: ${params.fps > 0 ? params.fps : "pet.json default"} · display-mode: ${params.displayMode} · card-motion: ${params.motion ? "on" : "off"} */`,
   ];
   readoutCode.textContent = lines.join("\n");
 }
@@ -430,6 +617,10 @@ function refreshUiNames(): void {
 let editorBody: HTMLElement | null = null;
 
 function renderStatusCards(): void {
+  // 整列アニメ（FLIP）のため、変更前のカード位置を記録。
+  const before = captureCardRects();
+  const fresh = new Set<string>();
+
   // 既存セッション分を upsert
   for (const session of sessions.values()) {
     let el = cards.get(session.id);
@@ -437,16 +628,24 @@ function renderStatusCards(): void {
       el = createStatusCard(session.id, session, { onClose: removeSession });
       cards.set(session.id, el);
       stackEl.appendChild(el);
+      fresh.add(session.id);
     } else {
       updateStatusCard(el, session);
     }
   }
-  // 消えたセッションの card を除去
+  // 消えたセッションの card を除去（アニメ無し経路。退場演出は removeSession 側）
   for (const [id, el] of cards) {
     if (!sessions.has(id)) {
       el.remove();
       cards.delete(id);
     }
+  }
+
+  // 既存カードは新レイアウトへスプリングで詰め、新規カードは登場アニメ。
+  flipReflow(before, fresh);
+  for (const id of fresh) {
+    const el = cards.get(id);
+    if (el) animateCardIn(el);
   }
 }
 
@@ -540,10 +739,25 @@ function addSession(source: SourceId, state: AgentState = "running"): void {
 }
 
 function removeSession(id: string): void {
-  sessions.delete(id);
-  renderStatusCards();
-  renderEditors();
-  apply();
+  const el = cards.get(id);
+  if (!el || !motionOn()) {
+    sessions.delete(id);
+    renderStatusCards();
+    renderEditors();
+    apply();
+    return;
+  }
+  // 退場: その場でフェード → DOM 除去 → 残りを FLIP で詰める。
+  void (async () => {
+    await animateCardOut(el);
+    const before = captureCardRects(); // el を含む（まだ index に在る）
+    el.remove();
+    cards.delete(id);
+    sessions.delete(id);
+    flipReflow(before, new Set([id]));
+    renderEditors();
+    apply();
+  })();
 }
 
 function escapeAttr(v: string): string {
@@ -596,10 +810,22 @@ let displayModeControl!: { set: (v: DisplayMode) => void };
     for (const [src, st] of order) addSession(src, st);
   });
   const clearBtn = button("Clear", () => {
+    if (!motionOn() || cards.size === 0) {
+      sessions.clear();
+      renderStatusCards();
+      renderEditors();
+      apply();
+      return;
+    }
+    // 全カードをフェードアウトしてから除去。
+    const els = Array.from(cards.values());
     sessions.clear();
-    renderStatusCards();
+    cards.clear();
     renderEditors();
     apply();
+    void Promise.all(els.map((el) => animateCardOut(el))).then(() => {
+      for (const el of els) el.remove();
+    });
   });
   presets.append(longBtn, fillBtn, clearBtn);
   body.appendChild(presets);
@@ -630,6 +856,7 @@ function button(label: string, onClick: () => void): HTMLButtonElement {
     unit: "px",
     onInput: (v) => {
       params.petSize = v;
+      reclampPet(); // 大きくしたとき端からはみ出さないよう内側へ寄せる
       apply();
     },
   });
@@ -738,6 +965,20 @@ function button(label: string, onClick: () => void): HTMLButtonElement {
   });
 }
 
+// Motion
+{
+  const body = group("Motion");
+  toggle(body, "Card micro-motion", params.motion, (v) => {
+    params.motion = v;
+    apply();
+  });
+  const note = document.createElement("p");
+  note.className = "pg-note";
+  note.textContent =
+    "OS の reduced-motion を尊重（有効時は自動で無効）。アバターはドラッグで移動でき、スタックは象限に合わせて再配置される。";
+  body.appendChild(note);
+}
+
 // Debug
 {
   const body = group("Debug");
@@ -784,6 +1025,9 @@ window.addEventListener("resize", refreshUiNames);
 // ─────────────────────────────────────────────────────────────────────────────
 // 初期セッション
 // ─────────────────────────────────────────────────────────────────────────────
+
+placePetInitial(); // 右下（従来の見え方）に置く。anchor-* クラスもここで付く。
+window.addEventListener("resize", reclampPet);
 
 addSession("claude-code", "running");
 addSession("codex", "waiting_approval");
