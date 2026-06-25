@@ -1,10 +1,26 @@
 ---
 id: c4b1e0
-title: navi 固有 UI を @navi/ui に抽出する（吹き出し・バッジ・ボタン）
+title: navi 固有 UI を @navi/ui に抽出する（ステータスカード・バッジ・状態モデル）
 type: feature
-status: todo
+status: done
 priority: high
 ---
+
+## 完了メモ
+
+- `packages/ui/src/navi/`（`@navi/ui/navi`）を新設し、ステータスカードの DOM 部品
+  （`createStatusCard` / `updateStatusCard`）・ソースバッジ（`sourceConfig` + `@lobehub/icons-static-svg`）・
+  状態モデル（`AgentState` / `StatusCardData` / `stateLabels` / `STATE_PRIORITY` /
+  `highestPriorityState` / `cardMessage` / `cardDir` / `isVisibleInAuto` / `DisplayMode`）を集約。
+- 部品は **props in / DOM out** のダム部品。シェル配線（`sessions` 管理・`bridge`・イベント購読・
+  Tauri ドラッグ）は `app/src/main.ts` に残置（`mountStatusCard` が `@navi/ui` の部品に Tauri
+  ドラッグを足して載せる）。
+- `app` と `examples/playground` の両方が `@navi/ui/navi` を import。playground のローカル複製
+  （旧 `examples/playground/src/status-card.ts`）は削除。
+- `@lobehub/icons-static-svg` 依存を `@navi/ui` 側へ移設（app/playground からは除去）。
+- 範囲外は据え置き: app シェルの `<navi-pet>` 描画移行（`e1f5c3`）。CSS の共通化は次段。
+- 検証: app `tsc` / `vitest`(19 passed) / `@navi/ui` `tsc` / playground `tsc` / 両ビルド緑。
+  ヘッドレス Chromium で playground 描画が従来どおりであることを確認。
 
 > 前提を読むこと: `CLAUDE.md`、`docs/concept.md`（用語）、`docs/frontend-packaging.md`。
 > 先行 issue `a7f3d2` でパッケージ分割は完了済み。

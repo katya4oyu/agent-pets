@@ -10,13 +10,13 @@ importers:
 
   app:
     dependencies:
+      '@navi/ui':
+        specifier: workspace:*
+        version: link:../packages/ui
       '@tauri-apps/api':
         specifier: ^2.0.0
         version: 2.11.1
     devDependencies:
-      '@lobehub/icons-static-svg':
-        specifier: ^1.90.0
-        version: 1.91.0
       '@tauri-apps/cli':
         specifier: ^2.0.0
         version: 2.11.3
@@ -32,9 +32,6 @@ importers:
 
   examples/playground:
     dependencies:
-      '@lobehub/icons-static-svg':
-        specifier: ^1.90.0
-        version: 1.91.0
       '@navi/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -47,6 +44,10 @@ importers:
         version: 8.1.0
 
   packages/ui:
+    dependencies:
+      '@lobehub/icons-static-svg':
+        specifier: ^1.90.0
+        version: 1.91.0
     devDependencies:
       typescript:
         specifier: ^5.4.0

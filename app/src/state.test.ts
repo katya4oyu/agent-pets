@@ -113,7 +113,7 @@ describe("cardMessage", () => {
 
 describe("cardDir", () => {
   it("prefers the project name when present", () => {
-    expect(cardDir({ project_name: "agent-pets", cwd: "/home/user/x" })).toBe(
+    expect(cardDir({ project: "agent-pets", cwd: "/home/user/x" })).toBe(
       "agent-pets",
     );
   });

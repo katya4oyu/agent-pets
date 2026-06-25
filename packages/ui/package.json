@@ -6,10 +6,14 @@
   "description": "navi presentation layer. Internally split by origin: src/codex-pet/ is the codex-compatible sprite renderer; navi-specific UI lives alongside it.",
   "exports": {
     ".": "./src/index.ts",
-    "./codex-pet": "./src/codex-pet/index.ts"
+    "./codex-pet": "./src/codex-pet/index.ts",
+    "./navi": "./src/navi/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@lobehub/icons-static-svg": "^1.90.0"
   },
   "devDependencies": {
     "typescript": "^5.4.0"

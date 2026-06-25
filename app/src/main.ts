@@ -1,19 +1,19 @@
 import { invoke, listen, startDragging } from "./bridge";
 import "./styles.css";
-import claudeCodeSvg from "@lobehub/icons-static-svg/icons/claudecode.svg?raw";
-import codexSvg from "@lobehub/icons-static-svg/icons/codex.svg?raw";
-import copilotSvg from "@lobehub/icons-static-svg/icons/copilot.svg?raw";
 import {
   type AgentState,
   type DisplayMode,
+  type StatusCardData,
+  highestPriorityState,
+  isVisibleInAuto,
+  createStatusCard,
+  updateStatusCard,
+} from "@navi/ui/navi";
+import {
   type HookEventPayload,
   type AnimationSpec,
   animations,
   sessionKey,
-  highestPriorityState,
-  cardMessage,
-  cardDir,
-  isVisibleInAuto,
 } from "./state";
 
 type PetAsset = {
@@ -41,12 +41,6 @@ interface SessionEntry {
   state: AgentState;
   element: HTMLElement;
 }
-
-const sourceConfig: Record<string, { label: string; color: string; svg: string }> = {
-  "claude-code": { label: "Claude Code", color: "#CC785C", svg: claudeCodeSvg },
-  codex:         { label: "Codex",       color: "#10A37F", svg: codexSvg },
-  copilot:       { label: "Copilot",     color: "#6F42C1", svg: copilotSvg },
-};
 
 let animationTimer: ReturnType<typeof setTimeout> | null = null;
 let spriteContext: CanvasRenderingContext2D | null = null;
@@ -188,21 +182,22 @@ function updateSessionCount() {
   }
 }
 
-function createStatusCard(key: string): HTMLElement {
-  const card = document.createElement("div");
-  card.className = "status-card";
+/** hook ペイロード → ステータスカードの表示データ（project_name → project）。 */
+function toCardData(payload: HookEventPayload): StatusCardData {
+  return {
+    source: payload.source,
+    state: payload.state,
+    label: payload.label,
+    message: payload.message,
+    project: payload.project_name,
+    cwd: payload.cwd,
+  };
+}
+
+/** @navi/ui のステータスカードを生成し、シェル固有の配線（Tauri ドラッグ）を足して載せる。 */
+function mountStatusCard(key: string, data: StatusCardData): HTMLElement {
+  const card = createStatusCard(key, data, { onClose: removeStatusCard });
   card.setAttribute("data-tauri-drag-region", "");
-  card.innerHTML = `
-    <button class="status-card-close" type="button" aria-label="Remove session">×</button>
-    <div class="source-badge" aria-label="Source agent"></div>
-    <p class="status-card-title"></p>
-    <p class="message"></p>
-    <p class="cwd-label" hidden></p>
-  `;
-  card.querySelector<HTMLButtonElement>(".status-card-close")?.addEventListener("click", (e) => {
-    e.stopPropagation();
-    removeStatusCard(key);
-  });
   card.addEventListener("pointerdown", (event) => {
     const target = event.target;
     const interactive = target instanceof Element && Boolean(target.closest("button"));
@@ -212,36 +207,6 @@ function createStatusCard(key: string): HTMLElement {
   });
   statusStack?.appendChild(card);
   return card;
-}
-
-function updateStatusCard(card: HTMLElement, payload: HookEventPayload) {
-  card.setAttribute("data-state", payload.state);
-  const title = card.querySelector<HTMLParagraphElement>(".status-card-title");
-  const msg = card.querySelector<HTMLParagraphElement>(".message");
-  const cwdLabel = card.querySelector<HTMLParagraphElement>(".cwd-label");
-  const sourceBadge = card.querySelector<HTMLDivElement>(".source-badge");
-
-  if (title) title.textContent = payload.label;
-  if (msg) {
-    msg.textContent = cardMessage(payload);
-  }
-  const dir = cardDir(payload);
-  if (cwdLabel) {
-    cwdLabel.textContent = dir ?? "";
-    cwdLabel.hidden = !dir;
-  }
-  const cfg = sourceConfig[payload.source];
-  if (sourceBadge) {
-    if (cfg) {
-      sourceBadge.innerHTML = cfg.svg;
-      sourceBadge.setAttribute("data-source", payload.source);
-      sourceBadge.title = cfg.label;
-    } else {
-      sourceBadge.innerHTML = "";
-      sourceBadge.removeAttribute("data-source");
-      sourceBadge.title = payload.source;
-    }
-  }
 }
 
 function removeStatusCard(key: string) {
@@ -258,15 +223,17 @@ function removeStatusCard(key: string) {
 
 function applyAgentState(payload: HookEventPayload) {
   const key = sessionKey(payload);
+  const data = toCardData(payload);
 
   let session = sessions.get(key);
   if (!session) {
-    const element = createStatusCard(key);
+    const element = mountStatusCard(key, data);
     session = { state: payload.state, element };
     sessions.set(key, session);
+  } else {
+    updateStatusCard(session.element, data);
   }
   session.state = payload.state;
-  updateStatusCard(session.element, payload);
   updateSessionCount();
   updatePetAnimation();
   if (displayMode === "auto") {

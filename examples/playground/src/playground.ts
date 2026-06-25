@@ -3,7 +3,7 @@ import "./playground.css";
 import {
   type AgentState,
   type SourceId,
-  type SessionData,
+  type StatusCardData,
   agentStates,
   sourceConfig,
   stateLabels,
@@ -11,7 +11,13 @@ import {
   isVisibleInAuto,
   createStatusCard,
   updateStatusCard,
-} from "./status-card";
+} from "@navi/ui/navi";
+
+// playground のセッションはステータスカードのデータ＋安定 id。
+interface SessionData extends StatusCardData {
+  id: string;
+  source: SourceId;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // playground = pet アバター × navi 固有 UI の統合デザインをチューニングするサンドボックス
@@ -428,7 +434,7 @@ function renderStatusCards(): void {
   for (const session of sessions.values()) {
     let el = cards.get(session.id);
     if (!el) {
-      el = createStatusCard(session, { onClose: removeSession });
+      el = createStatusCard(session.id, session, { onClose: removeSession });
       cards.set(session.id, el);
       stackEl.appendChild(el);
     } else {

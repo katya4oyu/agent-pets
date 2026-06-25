@@ -10,7 +10,6 @@
     "preview": "vite preview --host 127.0.0.1"
   },
   "dependencies": {
-    "@lobehub/icons-static-svg": "^1.90.0",
     "@navi/ui": "workspace:*"
   },
   "devDependencies": {
