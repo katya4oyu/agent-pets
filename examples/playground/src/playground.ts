@@ -27,6 +27,7 @@ interface SessionData extends StatusCardData {
 // ─────────────────────────────────────────────────────────────────────────────
 
 type DisplayMode = "show" | "hide" | "auto";
+type AccentStyle = "rail" | "tint" | "ring" | "bar";
 
 interface Params {
   petSize: number;
@@ -43,6 +44,7 @@ interface Params {
   maxVisible: number;
   fps: number; // 0 = pet.json 既定
   displayMode: DisplayMode;
+  accentStyle: AccentStyle; // state カラーの見せ方
   motion: boolean; // ステータスカードのマイクロモーション ON/OFF
   colors: Record<SourceId, string>;
 }
@@ -62,6 +64,7 @@ const params: Params = {
   maxVisible: 3,
   fps: 0,
   displayMode: "show",
+  accentStyle: "rail",
   motion: true,
   colors: {
     "claude-code": sourceConfig["claude-code"].color,
@@ -475,6 +478,8 @@ function apply(): void {
   s.setProperty("--src-codex", params.colors.codex);
   s.setProperty("--src-copilot", params.colors.copilot);
 
+  shell.dataset.accent = params.accentStyle;
+
   if (params.fps > 0) pet.setAttribute("fps", String(params.fps));
   else pet.removeAttribute("fps");
 
@@ -517,7 +522,7 @@ function refreshReadout(): void {
     `  --src-copilot: ${params.colors.copilot};`,
     "}",
     "",
-    `/* pet fps: ${params.fps > 0 ? params.fps : "pet.json default"} · display-mode: ${params.displayMode} · card-motion: ${params.motion ? "on" : "off"} */`,
+    `/* state-accent: ${params.accentStyle} · pet fps: ${params.fps > 0 ? params.fps : "pet.json default"} · display-mode: ${params.displayMode} · card-motion: ${params.motion ? "on" : "off"} */`,
   ];
   readoutCode.textContent = lines.join("\n");
 }
@@ -905,6 +910,16 @@ function button(label: string, onClick: () => void): HTMLButtonElement {
 // Card
 {
   const body = group("Card");
+  segmented<AccentStyle>(
+    body,
+    "State accent",
+    ["rail", "tint", "ring", "bar"],
+    params.accentStyle,
+    (v) => {
+      params.accentStyle = v;
+      apply();
+    },
+  );
   const defs: SliderOpts[] = [
     { label: "Max width", min: 180, max: 360, value: params.cardWidth, unit: "px", onInput: (v) => (params.cardWidth = v) },
     { label: "Padding X", min: 4, max: 24, value: params.cardPadX, unit: "px", onInput: (v) => (params.cardPadX = v) },

@@ -297,9 +297,61 @@ button {
   }
 }
 
-/* ── state accent (left edge) ── */
+/* ── state accent ──
+ * state カラーの「見せ方」は data-accent で切替（playground で比較 → 良い表現を確定）。
+ * 色そのものは --state-color に集約し、各スタイルはそれを参照する。
+ * - rail : 左端の縦レール（角丸に沿わせて flush。inset バーの中途半端さを解消）
+ * - tint : カード全体をごく薄く state 色で染め、タイトルも同系色へ
+ * - ring : カード全体を state 色のインセット枠で囲む
+ * - bar  : 旧来の inset 短バー（比較用）
+ */
 
-.status-card::before {
+.status-card[data-state="error"] {
+  --state-color: #e5484d;
+}
+.status-card[data-state="waiting_approval"] {
+  --state-color: #f5a623;
+}
+.status-card[data-state="running"],
+.status-card[data-state="thinking"],
+.status-card[data-state="editing"] {
+  --state-color: #3b82f6;
+}
+.status-card[data-state="done"] {
+  --state-color: #16a34a;
+}
+
+/* rail: 角丸に沿った flush な縦レール */
+[data-accent="rail"] .status-card::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--state-color, transparent);
+  border-top-left-radius: var(--card-radius);
+  border-bottom-left-radius: var(--card-radius);
+}
+
+/* tint: 全体を薄く染める + タイトルを同系色へ */
+[data-accent="tint"] .status-card {
+  background: color-mix(in srgb, var(--state-color, #fff) 7%, #fff);
+}
+[data-accent="tint"] .status-card-title {
+  color: color-mix(in srgb, var(--state-color, #10131c) 55%, #10131c);
+}
+
+/* ring: state 色のインセット枠（影は維持） */
+[data-accent="ring"] .status-card {
+  box-shadow:
+    0 var(--card-shadow-y) var(--card-shadow-blur)
+      rgba(16, 19, 28, var(--card-shadow-alpha)),
+    inset 0 0 0 1.4px color-mix(in srgb, var(--state-color, transparent) 62%, transparent);
+}
+
+/* bar: 旧来の inset 短バー（比較用） */
+[data-accent="bar"] .status-card::before {
   content: "";
   position: absolute;
   left: 0;
@@ -307,22 +359,7 @@ button {
   bottom: 10px;
   width: 3px;
   border-radius: 3px;
-  background: transparent;
-}
-
-.status-card[data-state="error"]::before {
-  background: #e5484d;
-}
-.status-card[data-state="waiting_approval"]::before {
-  background: #f5a623;
-}
-.status-card[data-state="running"]::before,
-.status-card[data-state="thinking"]::before,
-.status-card[data-state="editing"]::before {
-  background: #3b82f6;
-}
-.status-card[data-state="done"]::before {
-  background: #16a34a;
+  background: var(--state-color, transparent);
 }
 
 /* ── Toggle + session count ── */
