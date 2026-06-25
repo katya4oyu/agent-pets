@@ -257,6 +257,17 @@ button {
   width: 20px;
   height: 20px;
   flex-shrink: 0;
+  /* 光学サイズ補正: 各ロゴで viewBox 内の占有率が違うため、見た目を揃える。 */
+  transform: scale(var(--badge-glyph-scale, 1));
+  transform-origin: center;
+}
+
+/* Codex は渦巻きが viewBox を full-bleed するので一段縮小、Copilot も僅かに。 */
+.source-badge[data-source="codex"] {
+  --badge-glyph-scale: 0.84;
+}
+.source-badge[data-source="copilot"] {
+  --badge-glyph-scale: 0.94;
 }
 
 /* mono: 全ソース共通の中立グレー（モノクロ）。 */
