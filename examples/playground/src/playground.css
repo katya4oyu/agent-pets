@@ -300,10 +300,10 @@ button {
 /* ── state accent ──
  * state カラーの「見せ方」は data-accent で切替（playground で比較 → 良い表現を確定）。
  * 色そのものは --state-color に集約し、各スタイルはそれを参照する。
- * - rail : 左端の縦レール（角丸に沿わせて flush。inset バーの中途半端さを解消）
- * - tint : カード全体をごく薄く state 色で染め、タイトルも同系色へ
- * - ring : カード全体を state 色のインセット枠で囲む
- * - bar  : 旧来の inset 短バー（比較用）
+ * - rail   : 左端の縦レール（角丸に沿わせて flush。inset バーの中途半端さを解消）
+ * - tint   : カード全体をごく薄く state 色で染め、タイトルも同系色へ
+ * - ring   : カード全体を state 色のインセット枠で囲む
+ * - shadow : ドロップシャドウ自体を state 色に（白カード＋角丸はそのまま、足元グロー）
  */
 
 .status-card[data-state="error"] {
@@ -321,7 +321,12 @@ button {
   --state-color: #16a34a;
 }
 
-/* rail: 角丸に沿った flush な縦レール */
+/* rail: 角丸に沿った flush な縦レール。
+   ::before 自身を丸めるとカードの円弧とズレるため、カードを overflow:hidden で
+   クリップし、半径なしの矩形レールを角丸どおりに切り抜く。 */
+[data-accent="rail"] .status-card {
+  overflow: hidden;
+}
 [data-accent="rail"] .status-card::before {
   content: "";
   position: absolute;
@@ -330,8 +335,6 @@ button {
   bottom: 0;
   width: 4px;
   background: var(--state-color, transparent);
-  border-top-left-radius: var(--card-radius);
-  border-bottom-left-radius: var(--card-radius);
 }
 
 /* tint: 全体を薄く染める + タイトルを同系色へ */
@@ -350,16 +353,17 @@ button {
     inset 0 0 0 1.4px color-mix(in srgb, var(--state-color, transparent) 62%, transparent);
 }
 
-/* bar: 旧来の inset 短バー（比較用） */
-[data-accent="bar"] .status-card::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 10px;
-  bottom: 10px;
-  width: 3px;
-  border-radius: 3px;
-  background: var(--state-color, transparent);
+/* shadow: ドロップシャドウ自体を state 色に。白いカード＋角丸はそのまま、
+   足元のグローで状態をにじませる。接地用のニュートラル影と細い枠は維持。 */
+[data-accent="shadow"] .status-card {
+  box-shadow:
+    /* 色付き影: ニュートラル影と同じ blur／オフセット（スライダー駆動）に揃える */
+    0 var(--card-shadow-y) var(--card-shadow-blur)
+      color-mix(in srgb, var(--state-color, transparent) 55%, transparent),
+    /* ニュートラル影は既定のまま据え置き（他アクセントとシルエットを揃える） */
+    0 var(--card-shadow-y) var(--card-shadow-blur)
+      rgba(16, 19, 28, var(--card-shadow-alpha)),
+    inset 0 0 0 1.2px rgba(29, 36, 51, 0.1);
 }
 
 /* ── Toggle + session count ── */

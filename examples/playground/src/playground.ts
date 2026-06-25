@@ -27,7 +27,7 @@ interface SessionData extends StatusCardData {
 // ─────────────────────────────────────────────────────────────────────────────
 
 type DisplayMode = "show" | "hide" | "auto";
-type AccentStyle = "rail" | "tint" | "ring" | "bar";
+type AccentStyle = "rail" | "tint" | "ring" | "shadow";
 
 interface Params {
   petSize: number;
@@ -913,7 +913,7 @@ function button(label: string, onClick: () => void): HTMLButtonElement {
   segmented<AccentStyle>(
     body,
     "State accent",
-    ["rail", "tint", "ring", "bar"],
+    ["rail", "tint", "ring", "shadow"],
     params.accentStyle,
     (v) => {
       params.accentStyle = v;
