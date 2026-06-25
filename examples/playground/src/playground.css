@@ -258,6 +258,7 @@ button {
   flex-shrink: 0;
 }
 
+/* mono: --src-* で着色（brand では多色 SVG が自前の fill を持つので無効化される） */
 .source-badge[data-source="claude-code"] {
   color: var(--src-claude-code);
 }
@@ -266,6 +267,12 @@ button {
 }
 .source-badge[data-source="copilot"] {
   color: var(--src-copilot);
+}
+
+/* brand: GitHub Copilot は公式単色（currentColor）のため、ブランド近似のダークで塗る。
+   codex / claude の brand は SVG 自身の配色（白タイル＋グラデ / クレイ）が出る。 */
+.source-badge[data-variant="brand"][data-source="copilot"] {
+  color: #1f2328;
 }
 
 /* badge shine while active */

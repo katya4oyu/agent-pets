@@ -3,6 +3,7 @@ import "./playground.css";
 import { animate } from "motion";
 import {
   type AgentState,
+  type BadgeVariant,
   type SourceId,
   type StatusCardData,
   agentStates,
@@ -45,6 +46,7 @@ interface Params {
   fps: number; // 0 = pet.json 既定
   displayMode: DisplayMode;
   accentStyle: AccentStyle; // state カラーの見せ方
+  badgeColor: BadgeVariant; // ソースバッジ: mono（単色）/ brand（公式配色）
   motion: boolean; // ステータスカードのマイクロモーション ON/OFF
   colors: Record<SourceId, string>;
 }
@@ -65,6 +67,7 @@ const params: Params = {
   fps: 0,
   displayMode: "show",
   accentStyle: "rail",
+  badgeColor: "mono",
   motion: true,
   colors: {
     "claude-code": sourceConfig["claude-code"].color,
@@ -522,7 +525,7 @@ function refreshReadout(): void {
     `  --src-copilot: ${params.colors.copilot};`,
     "}",
     "",
-    `/* state-accent: ${params.accentStyle} · pet fps: ${params.fps > 0 ? params.fps : "pet.json default"} · display-mode: ${params.displayMode} · card-motion: ${params.motion ? "on" : "off"} */`,
+    `/* state-accent: ${params.accentStyle} · badge: ${params.badgeColor} · pet fps: ${params.fps > 0 ? params.fps : "pet.json default"} · display-mode: ${params.displayMode} · card-motion: ${params.motion ? "on" : "off"} */`,
   ];
   readoutCode.textContent = lines.join("\n");
 }
@@ -615,6 +618,11 @@ function refreshUiNames(): void {
 
 let editorBody: HTMLElement | null = null;
 
+// ソースバッジの配色オプション（create/update へ渡す）。
+function badgeOpts(): { badge: BadgeVariant } {
+  return { badge: params.badgeColor };
+}
+
 function renderStatusCards(): void {
   // 整列アニメ（FLIP）のため、変更前のカード位置を記録。
   const before = captureCardRects();
@@ -624,12 +632,12 @@ function renderStatusCards(): void {
   for (const session of sessions.values()) {
     let el = cards.get(session.id);
     if (!el) {
-      el = createStatusCard(session.id, session, { onClose: removeSession });
+      el = createStatusCard(session.id, session, { onClose: removeSession }, badgeOpts());
       cards.set(session.id, el);
       stackEl.appendChild(el);
       fresh.add(session.id);
     } else {
-      updateStatusCard(el, session);
+      updateStatusCard(el, session, badgeOpts());
     }
   }
   // 消えたセッションの card を除去（アニメ無し経路。退場演出は removeSession 側）
@@ -725,7 +733,7 @@ function editorRow(session: SessionData): HTMLElement {
 /** session 1件の変更を card に反映（エディタは再構築しない＝フォーカス維持）。 */
 function syncSession(session: SessionData): void {
   const el = cards.get(session.id);
-  if (el) updateStatusCard(el, session);
+  if (el) updateStatusCard(el, session, badgeOpts());
   apply();
 }
 
@@ -956,6 +964,22 @@ function button(label: string, onClick: () => void): HTMLButtonElement {
 // Source colors
 {
   const body = group("Source colors");
+  segmented<BadgeVariant>(
+    body,
+    "Badge color",
+    ["mono", "brand"],
+    params.badgeColor,
+    (v) => {
+      params.badgeColor = v;
+      renderStatusCards(); // 全バッジを再描画
+      apply();
+    },
+  );
+  const note = document.createElement("p");
+  note.className = "pg-note";
+  note.textContent =
+    "mono = 単色（下の色で着色）／ brand = 公式配色（Codex は白タイル＋グラデ、Claude はクレイ）。GitHub Copilot は公式単色のみ。下の色は mono 時のみ効く。";
+  body.appendChild(note);
   color(body, "Claude Code", params.colors["claude-code"], (v) => {
     params.colors["claude-code"] = v;
     apply();
