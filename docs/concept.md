@@ -14,6 +14,9 @@
 
 過去に取り違えて手戻りした箇所。明確に区別すること。
 
+> 用語の**厳密な対応表（コード識別子つき）は `docs/glossary.md` を正**とする。
+> 本節は背景説明にとどめ、名前の確定は glossary を参照すること。
+
 - **「codex 本家」= OpenAI Codex の pets 機能のスプライト／アトラス規約**（`~/.codex/pets/<id>/` の `pet.json` + `spritesheet.webp`、8×9・192×208・行ごとに idle/running/.../review が固定。`docs/codex-pet-spritesheets.md`）。**`codex-pet-web` のことではない。**
 - **`codex-pet-web` = リポジトリオーナー自作の「練習リポジトリ」**（codex pet スプライトを Web Component で描くために作ったもの）。本家でも上流でもない。**必要コードは navi に直接移植済み**（`app/src/pet/navi-pet.ts` ← `<codex-pet>`、`app/src/pet/pet-core.ts` ← MoonBit `pet_core.mbt`。MoonBit は排除）。**外部依存・上流追従は不要。**
 - **責務は「出自」で切る**:
