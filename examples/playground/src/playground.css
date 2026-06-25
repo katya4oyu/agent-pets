@@ -66,6 +66,7 @@ button {
   --src-claude-code: #cc785c;
   --src-codex: #10a37f;
   --src-copilot: #6f42c1;
+  --badge-mono: #52525b; /* mono バリアント共通のモノクロ色 */
 }
 
 /* ── Pet ── */
@@ -258,14 +259,19 @@ button {
   flex-shrink: 0;
 }
 
-/* mono: --src-* で着色（brand では多色 SVG が自前の fill を持つので無効化される） */
-.source-badge[data-source="claude-code"] {
+/* mono: 全ソース共通の中立グレー（モノクロ）。 */
+.source-badge[data-variant="mono"] {
+  color: var(--badge-mono);
+}
+
+/* tint: --src-* でソースごとに着色（単色）。 */
+.source-badge[data-variant="tint"][data-source="claude-code"] {
   color: var(--src-claude-code);
 }
-.source-badge[data-source="codex"] {
+.source-badge[data-variant="tint"][data-source="codex"] {
   color: var(--src-codex);
 }
-.source-badge[data-source="copilot"] {
+.source-badge[data-variant="tint"][data-source="copilot"] {
   color: var(--src-copilot);
 }
 

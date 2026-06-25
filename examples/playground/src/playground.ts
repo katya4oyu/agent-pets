@@ -46,7 +46,7 @@ interface Params {
   fps: number; // 0 = pet.json 既定
   displayMode: DisplayMode;
   accentStyle: AccentStyle; // state カラーの見せ方
-  badgeColor: BadgeVariant; // ソースバッジ: mono（単色）/ brand（公式配色）
+  badgeColor: BadgeVariant; // ソースバッジ: mono（モノクロ）/ tint（単色）/ brand（公式配色）
   motion: boolean; // ステータスカードのマイクロモーション ON/OFF
   colors: Record<SourceId, string>;
 }
@@ -523,6 +523,7 @@ function refreshReadout(): void {
     `  --src-claude-code: ${params.colors["claude-code"]};`,
     `  --src-codex: ${params.colors.codex};`,
     `  --src-copilot: ${params.colors.copilot};`,
+    "  --badge-mono: #52525b;",
     "}",
     "",
     `/* state-accent: ${params.accentStyle} · badge: ${params.badgeColor} · pet fps: ${params.fps > 0 ? params.fps : "pet.json default"} · display-mode: ${params.displayMode} · card-motion: ${params.motion ? "on" : "off"} */`,
@@ -967,7 +968,7 @@ function button(label: string, onClick: () => void): HTMLButtonElement {
   segmented<BadgeVariant>(
     body,
     "Badge color",
-    ["mono", "brand"],
+    ["mono", "tint", "brand"],
     params.badgeColor,
     (v) => {
       params.badgeColor = v;
@@ -978,7 +979,7 @@ function button(label: string, onClick: () => void): HTMLButtonElement {
   const note = document.createElement("p");
   note.className = "pg-note";
   note.textContent =
-    "mono = 単色（下の色で着色）／ brand = 公式配色（Codex は白タイル＋グラデ、Claude はクレイ）。GitHub Copilot は公式単色のみ。下の色は mono 時のみ効く。";
+    "mono = モノクロ（全ソース共通グレー）／ tint = 単色（下の色で着色）／ brand = 公式配色（Codex は白タイル＋グラデ、Claude はクレイ）。GitHub Copilot は公式単色のみ。下の色は tint 時のみ効く。";
   body.appendChild(note);
   color(body, "Claude Code", params.colors["claude-code"], (v) => {
     params.colors["claude-code"] = v;
