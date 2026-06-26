@@ -211,32 +211,37 @@ button {
   text-overflow: ellipsis;
 }
 
+/* close: 左上のソースバッジと同じ位置・同じ丸い形。既定は隠れ、カード hover で
+   バッジと crossfade して現れる丸いアイコンボタン（本家 codex の踏襲）。 */
 .status-card-close {
   position: absolute;
   top: 6px;
-  right: 6px;
+  left: 8px;
+  z-index: 2;
   display: grid;
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   place-items: center;
   border: 0;
   border-radius: 50%;
-  background: transparent;
-  color: #9aa1b0;
+  background: rgba(16, 19, 28, 0.06);
+  color: #6b7280;
   cursor: pointer;
-  font-size: 18px;
+  font-size: 15px;
   line-height: 1;
-  /* 常時うっすら表示 → カード hover で前面化、ボタン自体の hover で強調 */
-  opacity: 0.5;
+  /* 既定は隠す。hover 時だけ前面化（morph）。 */
+  opacity: 0;
+  pointer-events: none;
   transition: opacity 120ms ease, background 120ms ease, color 120ms ease;
 }
 
 .status-card:hover .status-card-close {
   opacity: 1;
+  pointer-events: auto;
 }
 
 .status-card-close:hover {
-  background: rgba(16, 19, 28, 0.08);
+  background: rgba(16, 19, 28, 0.12);
   color: #111827;
 }
 
@@ -269,7 +274,13 @@ button {
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  border-radius: 4px;
+  border-radius: 50%; /* 丸いアイコンボタン化（close と同形・同位置で morph） */
+  transition: opacity 120ms ease;
+}
+
+/* カード hover でソースバッジは退き、左上スロットを close へ譲る（crossfade）。 */
+.status-card:hover .source-badge {
+  opacity: 0;
 }
 
 .source-badge svg {

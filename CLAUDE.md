@@ -51,7 +51,7 @@ navi-hook (Rust CLI, app/src-tauri/src/bin/navi_hook.rs)
 
 ## Project rules / gotchas
 
-- **Record decisions; don't re-litigate them.** Significant product/UX/architecture decisions live in `docs/decisions.md` (append-only). Read it before proposing changes; when a new decision is made, log it in the same commit. Already decided, do not revisit without explicitly superseding: **status cards never auto-dismiss** (D1), **app targets desktop only — mobile is a playground-only concern** (D2), **state's primary cue is the top-right status icon** (D3).
+- **Record decisions; don't re-litigate them.** Significant product/UX/architecture decisions live in `docs/decisions.md` (append-only). Read it before proposing changes; when a new decision is made, log it in the same commit. Already decided, do not revisit without explicitly superseding: **status cards never auto-dismiss** (D1), **app targets desktop only — mobile is a playground-only concern** (D2), **state's primary cue is the top-right status icon** (D3), **close is a round top-left icon button that morphs from the source badge on hover** (D4).
 - **Don't pre-implement the future vision.** The navi roadmap (Operator Core / Skills / Outbound) is aspirational; current safe scope is **Phase 1 only — non-breaking internal refactors** (`docs/navi-roadmap.md`). Confirm before structural changes.
 - **Product is named "navi"** but the repo/config stay `agent-pets`; rename is deferred (`issues/3d107c`).
 - **Vite 8 / Node floor**: builds use Vite 8 (Vitest 4), which bundles with **Rolldown, not esbuild** (Rolldown forbids mutating the `generateBundle` `bundle` object — rename output files in `writeBundle` instead). Vite 8 needs Node `>=22.12` (or `>=20.19`).

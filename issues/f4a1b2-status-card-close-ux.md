@@ -1,10 +1,13 @@
 ---
 id: f4a1b2
-title: ステータスカードの「閉じる」操作を独自設計する（右上はステータスアイコン常設）
+title: 右上ステータスアイコンの図像セット（state→アイコン）と accent の降格
 type: design
-status: todo
+status: in-progress
 priority: high
 ---
+
+> 更新: 「閉じる」操作は **D4 で決定済み**（左上の丸いアイコンボタン、ソースバッジと hover で morph）。
+> playground に試作済み。本 issue の残りは **右上のステータスアイコン図像セット**（D3 の実装）。
 
 > 前提（既決・`docs/decisions.md`）: D1 自動消滅させない（手動 dismiss 必須）／D2 app は desktop のみ
 > （hover を一級の手段として使える）／D3 state の一次表現は右上のステータスアイコン。
@@ -16,13 +19,15 @@ priority: high
 我々も D3 で右上をステータスアイコンに使うと決めたため、**「閉じる」操作の置き場所が空く**。
 D1 で手動 dismiss は必須なので、独自に設計する。
 
-## 論点（未決）
+## 閉じる操作（決定済み・D4）
 
-右上ステータス常設を保ったまま、desktop hover でどう閉じるか。
+左上の丸いアイコンボタン。既定はソースバッジ、カード hover で crossfade して✖へ morph。
+playground 実装済み（`examples/playground/src/playground.css` の `.source-badge` / `.status-card-close`）。
+→ 詳細は `docs/decisions.md` D4 / `docs/status-card-design.md`。
 
-- **案1**: hover で✖が「ステータスアイコンの左隣」に出る（ステータスは少し左へ寄る）。
-  状態を一切隠さない（P4）／常設ボタン無し（P2）。動きがやや増える。
-- **案2**: ステータスアイコンが hover で✖に変化（同じ場所で二役）。要素最小だが hover 中は状態が隠れる。
+## 残りの論点（未決）
+
+右上の**ステータスアイコン図像セット**（D3 の具体化）。
 
 ## 決め方 / 検証
 

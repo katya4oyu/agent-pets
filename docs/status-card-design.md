@@ -83,6 +83,14 @@ line-box の幾何中心ではない。
 
 > ルール：**アイコンとテキストの縦位置は、line-box ではなく cap-height の中心で揃える。**
 
+### 1.4 丸形 ＋ close との morph（D4）
+
+- バッジは `border-radius:50%` の丸いアイコンボタン。
+- **カード hover で左上が crossfade して✖（削除）に変わる**（`.source-badge` opacity→0／`.status-card-close` opacity→1、
+  同位置・同サイズ `22px`・`top:6px left:8px`）。常設の閉じるボタンは置かない。
+- 右上はステータスアイコン（D3）に明け渡す。hover 中は出自が一時的に隠れる（タイトルの source 名で代替）。
+- 本家 codex pets の「hover で左上に丸い✖」を踏襲。`docs/decisions.md` D4。
+
 ---
 
 ## 2. 影 ＝ elevation（接地影）
