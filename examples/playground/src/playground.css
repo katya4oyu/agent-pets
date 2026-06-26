@@ -59,9 +59,10 @@ button {
   --card-gap: 6px;
   --card-offset-x: 8px;
   --card-offset-y: 8px;
-  --card-shadow-y: 8px;
-  --card-shadow-blur: 22px;
-  --card-shadow-alpha: 0.18;
+  --card-shadow-y: 6px;
+  --card-shadow-blur: 16px;
+  --card-shadow-spread: -8px; /* 負の spread で影の足元を内側に絞り、gap を越えて滲ませない */
+  --card-shadow-alpha: 0.2;
   --card-max-visible: 3;
   --src-claude-code: #cc785c;
   --src-codex: #10a37f;
@@ -166,7 +167,7 @@ button {
   border-radius: var(--card-radius);
   background: #fff;
   box-shadow:
-    0 var(--card-shadow-y) var(--card-shadow-blur)
+    0 var(--card-shadow-y) var(--card-shadow-blur) var(--card-shadow-spread)
       rgba(16, 19, 28, var(--card-shadow-alpha)),
     inset 0 0 0 1.2px rgba(29, 36, 51, 0.1);
   cursor: grab;
@@ -389,7 +390,7 @@ button {
 /* ring: state 色のインセット枠（影は維持） */
 [data-accent="ring"] .status-card {
   box-shadow:
-    0 var(--card-shadow-y) var(--card-shadow-blur)
+    0 var(--card-shadow-y) var(--card-shadow-blur) var(--card-shadow-spread)
       rgba(16, 19, 28, var(--card-shadow-alpha)),
     inset 0 0 0 1.4px color-mix(in srgb, var(--state-color, transparent) 62%, transparent);
 }
@@ -398,11 +399,11 @@ button {
    足元のグローで状態をにじませる。接地用のニュートラル影と細い枠は維持。 */
 [data-accent="shadow"] .status-card {
   box-shadow:
-    /* 色付き影: ニュートラル影と同じ blur／オフセット（スライダー駆動）に揃える */
-    0 var(--card-shadow-y) var(--card-shadow-blur)
+    /* 色付き影: ニュートラル影と同じ blur／オフセット／spread（スライダー駆動）に揃える */
+    0 var(--card-shadow-y) var(--card-shadow-blur) var(--card-shadow-spread)
       color-mix(in srgb, var(--state-color, transparent) 55%, transparent),
     /* ニュートラル影は既定のまま据え置き（他アクセントとシルエットを揃える） */
-    0 var(--card-shadow-y) var(--card-shadow-blur)
+    0 var(--card-shadow-y) var(--card-shadow-blur) var(--card-shadow-spread)
       rgba(16, 19, 28, var(--card-shadow-alpha)),
     inset 0 0 0 1.2px rgba(29, 36, 51, 0.1);
 }

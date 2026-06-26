@@ -41,6 +41,7 @@ interface Params {
   cardOffsetY: number;
   shadowY: number;
   shadowBlur: number;
+  shadowSpread: number;
   shadowAlpha: number;
   maxVisible: number;
   fps: number; // 0 = pet.json 既定
@@ -61,9 +62,10 @@ const params: Params = {
   cardGap: 6,
   cardOffsetX: 8,
   cardOffsetY: 8,
-  shadowY: 8,
-  shadowBlur: 22,
-  shadowAlpha: 0.18,
+  shadowY: 6,
+  shadowBlur: 16,
+  shadowSpread: -8,
+  shadowAlpha: 0.2,
   maxVisible: 3,
   fps: 0,
   displayMode: "show",
@@ -477,6 +479,7 @@ function apply(): void {
   s.setProperty("--card-offset-y", `${params.cardOffsetY}px`);
   s.setProperty("--card-shadow-y", `${params.shadowY}px`);
   s.setProperty("--card-shadow-blur", `${params.shadowBlur}px`);
+  s.setProperty("--card-shadow-spread", `${params.shadowSpread}px`);
   s.setProperty("--card-shadow-alpha", String(params.shadowAlpha));
   s.setProperty("--card-max-visible", String(params.maxVisible));
   s.setProperty("--src-claude-code", params.colors["claude-code"]);
@@ -521,7 +524,7 @@ function refreshReadout(): void {
     `  --card-gap: ${params.cardGap}px;`,
     `  --card-offset-x: ${params.cardOffsetX}px;`,
     `  --card-offset-y: ${params.cardOffsetY}px;`,
-    `  --card-shadow: 0 ${params.shadowY}px ${params.shadowBlur}px rgba(16, 19, 28, ${params.shadowAlpha});`,
+    `  --card-shadow: 0 ${params.shadowY}px ${params.shadowBlur}px ${params.shadowSpread}px rgba(16, 19, 28, ${params.shadowAlpha});`,
     `  --card-max-visible: ${params.maxVisible};`,
     `  --src-claude-code: ${params.colors["claude-code"]};`,
     `  --src-codex: ${params.colors.codex};`,
@@ -941,6 +944,7 @@ function button(label: string, onClick: () => void): HTMLButtonElement {
     { label: "Offset Y (above pet)", min: 0, max: 60, value: params.cardOffsetY, unit: "px", onInput: (v) => (params.cardOffsetY = v) },
     { label: "Shadow Y", min: 0, max: 24, value: params.shadowY, unit: "px", onInput: (v) => (params.shadowY = v) },
     { label: "Shadow blur", min: 0, max: 48, value: params.shadowBlur, unit: "px", onInput: (v) => (params.shadowBlur = v) },
+    { label: "Shadow spread", min: -24, max: 8, value: params.shadowSpread, unit: "px", onInput: (v) => (params.shadowSpread = v) },
   ];
   for (const d of defs) {
     const orig = d.onInput;
