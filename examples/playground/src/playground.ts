@@ -43,6 +43,9 @@ interface Params {
   shadowBlur: number;
   shadowSpread: number;
   shadowAlpha: number;
+  lightFollow: boolean; // positional shadow: ウィンドウ位置で影の向きを変える
+  lightX: number; // 仮想光源の水平位置（0=左端 / 0.5=中央 / 1=右端）
+  lightStrength: number; // 横方向の最大オフセット(px)
   maxVisible: number;
   fps: number; // 0 = pet.json 既定
   displayMode: DisplayMode;
@@ -66,6 +69,9 @@ const params: Params = {
   shadowBlur: 16,
   shadowSpread: -8,
   shadowAlpha: 0.2,
+  lightFollow: true,
+  lightX: 0.5,
+  lightStrength: 12,
   maxVisible: 3,
   fps: 0,
   displayMode: "show",
@@ -225,6 +231,26 @@ function clampPet(): void {
 function applyPetPosition(): void {
   shell.style.setProperty("--pet-x", `${petX}px`);
   shell.style.setProperty("--pet-y", `${petY}px`);
+  applyShadowVector();
+}
+
+// positional shadow: デスクトップ上に固定した仮想光源（上空・水平位置 lightX）から、
+// ウィンドウ（＝アバター）の位置に応じた影の横方向オフセットを計算する。
+// 光源より右にいれば影は右へ、左にいれば左へ倒れる（相似三角形の水平射影）。
+// y（落ち込み量）は据え置き＝光源は常に高い位置にある前提なので、影は必ず下に落ちる。
+function applyShadowVector(): void {
+  if (!params.lightFollow) {
+    shell.style.setProperty("--card-shadow-x", "0px");
+    return;
+  }
+  const stageRect = stage.getBoundingClientRect();
+  const { w } = petBox();
+  const cx = petX + w / 2; // ウィンドウ中心の水平位置
+  const lx = stageRect.width * params.lightX; // 光源の水平位置
+  const half = stageRect.width / 2 || 1;
+  const ratio = Math.max(-1, Math.min(1, (cx - lx) / half));
+  const x = ratio * params.lightStrength;
+  shell.style.setProperty("--card-shadow-x", `${x.toFixed(1)}px`);
 }
 
 // 現在見えているカードの位置を記録（FLIP の First）。
@@ -481,6 +507,7 @@ function apply(): void {
   s.setProperty("--card-shadow-blur", `${params.shadowBlur}px`);
   s.setProperty("--card-shadow-spread", `${params.shadowSpread}px`);
   s.setProperty("--card-shadow-alpha", String(params.shadowAlpha));
+  applyShadowVector();
   s.setProperty("--card-max-visible", String(params.maxVisible));
   s.setProperty("--src-claude-code", params.colors["claude-code"]);
   s.setProperty("--src-codex", params.colors.codex);
@@ -533,6 +560,9 @@ function refreshReadout(): void {
     "}",
     "",
     `/* state-accent: ${params.accentStyle} · badge: ${params.badgeColor} · pet fps: ${params.fps > 0 ? params.fps : "pet.json default"} · display-mode: ${params.displayMode} · card-motion: ${params.motion ? "on" : "off"} */`,
+    params.lightFollow
+      ? `/* positional shadow: ON · light-x ${params.lightX} · lean ±${params.lightStrength}px (--card-shadow-x はウィンドウ位置で動的) */`
+      : "/* positional shadow: OFF (光源は真上固定・影は真下) */",
   ];
   readoutCode.textContent = lines.join("\n");
 }
@@ -967,6 +997,28 @@ function button(label: string, onClick: () => void): HTMLButtonElement {
       apply();
     },
   });
+}
+
+// Light source (positional shadow)
+{
+  const body = group("Light source");
+  toggle(body, "Shadow follows window", params.lightFollow, (v) => {
+    params.lightFollow = v;
+    apply();
+  });
+  const defs = [
+    { label: "Light X (0=left, 1=right)", min: 0, max: 1, step: 0.01, value: params.lightX, unit: "", onInput: (v: number) => (params.lightX = v) },
+    { label: "Lean strength", min: 0, max: 24, value: params.lightStrength, unit: "px", onInput: (v: number) => (params.lightStrength = v) },
+  ];
+  for (const d of defs) {
+    const orig = d.onInput;
+    slider(body, { ...d, onInput: (v) => { orig(v); apply(); } });
+  }
+  const note = document.createElement("p");
+  note.className = "pg-note";
+  note.textContent =
+    "デスクトップ上に固定した仮想光源（上空・水平位置 Light X）から、ウィンドウ位置に応じて影の向きを計算する。アバターを左右にドラッグすると影が光源と反対側へ倒れる。OFF で真下固定（光源は常に真上）。";
+  body.appendChild(note);
 }
 
 // Source colors
