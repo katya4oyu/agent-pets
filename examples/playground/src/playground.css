@@ -46,6 +46,12 @@ button {
   --pet-size: 128px;
   --pet-h: calc(var(--pet-size) * 208 / 192);
   --stage-pad: 28px;
+  /* アバターの左上座標（ステージ内 px）。playground.ts の drag が書き込む。
+     ステータススタックはこの座標とアンカー（anchor-*）から位置を導出する。 */
+  --pet-x: 0px;
+  --pet-y: 0px;
+  --pet-right: calc(var(--pet-x) + var(--pet-size));
+  --pet-bottom: calc(var(--pet-y) + var(--pet-h));
   --card-width: 266px;
   --card-pad-x: 10px;
   --card-pad-y: 9px;
@@ -53,23 +59,32 @@ button {
   --card-gap: 6px;
   --card-offset-x: 8px;
   --card-offset-y: 8px;
-  --card-shadow-y: 8px;
-  --card-shadow-blur: 22px;
-  --card-shadow-alpha: 0.18;
+  --card-shadow-x: 0px; /* positional shadow: デスクトップ上の光源位置から動的計算（TS） */
+  --card-shadow-y: 6px;
+  --card-shadow-blur: 16px;
+  --card-shadow-spread: -8px; /* 負の spread で影の足元を内側に絞り、gap を越えて滲ませない */
+  --card-shadow-alpha: 0.2;
   --card-max-visible: 3;
   --src-claude-code: #cc785c;
   --src-codex: #10a37f;
   --src-copilot: #6f42c1;
+  --badge-mono: #52525b; /* mono バリアント共通のモノクロ色 */
 }
 
 /* ── Pet ── */
 
 .navi-pet-wrap {
   position: absolute;
-  right: var(--stage-pad);
-  bottom: var(--stage-pad);
+  left: var(--pet-x);
+  top: var(--pet-y);
   width: var(--pet-size);
   height: var(--pet-h);
+  cursor: grab;
+  touch-action: none;
+}
+
+.navi-pet-wrap.dragging {
+  cursor: grabbing;
 }
 
 .navi-pet-wrap navi-pet {
@@ -81,23 +96,51 @@ button {
 
 .status-stack {
   position: absolute;
-  /* offset-x は「pet の右マージンからの追加オフセット」（パネルのラベルどおり） */
-  right: calc(var(--stage-pad) + var(--card-offset-x));
-  bottom: calc(var(--stage-pad) + var(--pet-h) + var(--card-offset-y));
   width: var(--card-width);
   display: flex;
   flex-direction: column;
   gap: var(--card-gap);
-  /* 最大表示件数で頭打ちにしつつ、ステージの空き高さも超えない（超過分はステージ上端で
-     切れずに内部スクロールへ）。100% = navi-shell の高さ = ステージ高。 */
-  max-height: min(
-    calc(var(--card-max-visible) * 112px),
-    calc(100% - var(--stage-pad) - var(--pet-h) - var(--card-offset-y) - 10px)
-  );
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: rgba(29, 36, 51, 0.18) transparent;
   transition: opacity 120ms ease, transform 120ms ease, visibility 120ms ease;
+}
+
+/* ── ステータススタックの位置はアバターの四象限（アンカー）から導出する ──
+   水平: pet が左半分なら左揃え / 右半分なら右揃え。
+   垂直: pet が下半分ならスタックは上に積む / 上半分なら下に積む。
+   ドラッグでアバターをデスクトップ上のどこへ動かしても、カードがはみ出さない側へ展開する。
+   offset-x/-y は pet 端からの追加すきま（パネルのラベルどおり）。 */
+
+.anchor-h-right .status-stack {
+  right: calc(100% - var(--pet-right) + var(--card-offset-x));
+  left: auto;
+}
+.anchor-h-left .status-stack {
+  left: calc(var(--pet-x) + var(--card-offset-x));
+  right: auto;
+}
+
+.anchor-v-bottom .status-stack {
+  /* pet の上に積む。下端を pet 上端に合わせ、上方向へ伸びる（新しいカードが pet 寄り）。 */
+  bottom: calc(100% - var(--pet-y) + var(--card-offset-y));
+  top: auto;
+  flex-direction: column;
+  max-height: min(
+    calc(var(--card-max-visible) * 112px),
+    calc(var(--pet-y) - var(--card-offset-y) - 10px)
+  );
+}
+.anchor-v-top .status-stack {
+  /* pet の下に積む。上端を pet 下端に合わせ、下方向へ伸びる。column-reverse で
+     新しいカード（DOM 末尾）が pet 寄り＝上端に来る。 */
+  top: calc(var(--pet-bottom) + var(--card-offset-y));
+  bottom: auto;
+  flex-direction: column-reverse;
+  max-height: min(
+    calc(var(--card-max-visible) * 112px),
+    calc(100% - var(--pet-bottom) - var(--card-offset-y) - 10px)
+  );
 }
 
 .status-stack::-webkit-scrollbar {
@@ -125,7 +168,7 @@ button {
   border-radius: var(--card-radius);
   background: #fff;
   box-shadow:
-    0 var(--card-shadow-y) var(--card-shadow-blur)
+    var(--card-shadow-x) var(--card-shadow-y) var(--card-shadow-blur) var(--card-shadow-spread)
       rgba(16, 19, 28, var(--card-shadow-alpha)),
     inset 0 0 0 1.2px rgba(29, 36, 51, 0.1);
   cursor: grab;
@@ -134,7 +177,8 @@ button {
 
 .status-card-title {
   margin: 0;
-  padding-right: 26px;
+  padding-left: 28px;
+  padding-right: 28px;
   overflow: hidden;
   color: #10131c;
   font-size: 14px;
@@ -167,60 +211,118 @@ button {
   text-overflow: ellipsis;
 }
 
+/* close: 左上のソースバッジと同じ位置・同じ丸い形。既定は隠れ、カード hover で
+   バッジと crossfade して現れる丸いアイコンボタン（本家 codex の踏襲）。 */
 .status-card-close {
   position: absolute;
   top: 6px;
   left: 8px;
+  z-index: 2;
   display: grid;
-  width: 26px;
-  height: 26px;
+  width: 22px;
+  height: 22px;
   place-items: center;
   border: 0;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.95);
-  color: #111827;
+  background: rgba(16, 19, 28, 0.06);
+  color: #6b7280;
   cursor: pointer;
-  font-size: 20px;
+  font-size: 15px;
   line-height: 1;
+  /* 既定は隠す。hover 時だけ前面化（morph）。 */
   opacity: 0;
   pointer-events: none;
-  transition: opacity 100ms ease;
+  transition: opacity 120ms ease, background 120ms ease, color 120ms ease;
 }
 
-.status-card:hover .status-card-close {
+.status-card:hover .status-card-close,
+.status-card.peek-close .status-card-close {
   opacity: 1;
   pointer-events: auto;
+}
+
+.status-card-close:hover {
+  background: rgba(16, 19, 28, 0.12);
+  color: #111827;
+}
+
+/* ── debug grid (playground only) ──
+ * カードの左上 (0,0) を原点に、4px 細グリッド＋8px 太グリッドをうっすら重ねる。
+ * バッジ/テキストの座標合わせを目視確認するための補助。data-grid="on" で表示。 */
+[data-grid="on"] .status-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  background-position: 0 0; /* カード左上を基準 */
+  background-image:
+    repeating-linear-gradient(to right, rgba(16, 19, 28, 0.16) 0 1px, transparent 1px 8px),
+    repeating-linear-gradient(to bottom, rgba(16, 19, 28, 0.16) 0 1px, transparent 1px 8px),
+    repeating-linear-gradient(to right, rgba(16, 19, 28, 0.06) 0 1px, transparent 1px 4px),
+    repeating-linear-gradient(to bottom, rgba(16, 19, 28, 0.06) 0 1px, transparent 1px 4px);
 }
 
 /* ── Source badge ── */
 
 .source-badge {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  top: 6px;
+  left: 8px;
   display: flex;
   width: 22px;
   height: 22px;
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  border-radius: 4px;
+  border-radius: 50%; /* 丸いアイコンボタン化（close と同形・同位置で morph） */
+  transition: opacity 120ms ease;
+}
+
+/* カード hover（desktop）／peek-close（タッチでタップ時）でソースバッジは退き、
+   左上スロットを close へ譲る（crossfade）。 */
+.status-card:hover .source-badge,
+.status-card.peek-close .source-badge {
+  opacity: 0;
 }
 
 .source-badge svg {
   width: 20px;
   height: 20px;
   flex-shrink: 0;
+  /* 光学サイズ補正: 各ロゴで viewBox 内の占有率が違うため、見た目を揃える。 */
+  transform: scale(var(--badge-glyph-scale, 1));
+  transform-origin: center;
 }
 
-.source-badge[data-source="claude-code"] {
-  color: var(--src-claude-code);
-}
+/* Codex は渦巻きが viewBox を full-bleed するので一段縮小、Copilot も僅かに。 */
 .source-badge[data-source="codex"] {
-  color: var(--src-codex);
+  --badge-glyph-scale: 0.84;
 }
 .source-badge[data-source="copilot"] {
+  --badge-glyph-scale: 0.94;
+}
+
+/* mono: 全ソース共通の中立グレー（モノクロ）。 */
+.source-badge[data-variant="mono"] {
+  color: var(--badge-mono);
+}
+
+/* tint: --src-* でソースごとに着色（単色）。 */
+.source-badge[data-variant="tint"][data-source="claude-code"] {
+  color: var(--src-claude-code);
+}
+.source-badge[data-variant="tint"][data-source="codex"] {
+  color: var(--src-codex);
+}
+.source-badge[data-variant="tint"][data-source="copilot"] {
   color: var(--src-copilot);
+}
+
+/* brand: GitHub Copilot は公式単色（currentColor）のため、ブランド近似のダークで塗る。
+   codex / claude の brand は SVG 自身の配色（白タイル＋グラデ / クレイ）が出る。 */
+.source-badge[data-variant="brand"][data-source="copilot"] {
+  color: #1f2328;
 }
 
 /* badge shine while active */
@@ -252,51 +354,73 @@ button {
   }
 }
 
-/* ── Tail ── */
+/* ── state accent ──
+ * state カラーの「見せ方」は data-accent で切替（playground で比較 → 良い表現を確定）。
+ * 色そのものは --state-color に集約し、各スタイルはそれを参照する。
+ * - rail   : 左端の縦レール（角丸に沿わせて flush。inset バーの中途半端さを解消）
+ * - tint   : カード全体をごく薄く state 色で染め、タイトルも同系色へ
+ * - ring   : カード全体を state 色のインセット枠で囲む
+ * - shadow : ドロップシャドウ自体を state 色に（白カード＋角丸はそのまま、足元グロー）
+ */
 
-.status-card-tail {
-  display: none;
+.status-card[data-state="error"] {
+  --state-color: #e5484d;
+}
+.status-card[data-state="waiting_approval"] {
+  --state-color: #f5a623;
+}
+.status-card[data-state="running"],
+.status-card[data-state="thinking"],
+.status-card[data-state="editing"] {
+  --state-color: #3b82f6;
+}
+.status-card[data-state="done"] {
+  --state-color: #16a34a;
 }
 
-.has-tail .status-card:last-child .status-card-tail {
-  display: block;
-  position: absolute;
-  right: 22px;
-  bottom: -6px;
-  width: 12px;
-  height: 12px;
-  background: #fff;
-  box-shadow: inset 0 0 0 1.2px rgba(29, 36, 51, 0.1);
-  clip-path: polygon(0 0, 100% 0, 100% 100%);
-  transform: rotate(45deg);
+/* rail: 角丸に沿った flush な縦レール。
+   ::before 自身を丸めるとカードの円弧とズレるため、カードを overflow:hidden で
+   クリップし、半径なしの矩形レールを角丸どおりに切り抜く。 */
+[data-accent="rail"] .status-card {
+  overflow: hidden;
 }
-
-/* ── state accent (left edge) ── */
-
-.status-card::before {
+[data-accent="rail"] .status-card::before {
   content: "";
   position: absolute;
   left: 0;
-  top: 10px;
-  bottom: 10px;
-  width: 3px;
-  border-radius: 3px;
-  background: transparent;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--state-color, transparent);
 }
 
-.status-card[data-state="error"]::before {
-  background: #e5484d;
+/* tint: 全体を薄く染める + タイトルを同系色へ */
+[data-accent="tint"] .status-card {
+  background: color-mix(in srgb, var(--state-color, #fff) 7%, #fff);
 }
-.status-card[data-state="waiting_approval"]::before {
-  background: #f5a623;
+[data-accent="tint"] .status-card-title {
+  color: color-mix(in srgb, var(--state-color, #10131c) 55%, #10131c);
 }
-.status-card[data-state="running"]::before,
-.status-card[data-state="thinking"]::before,
-.status-card[data-state="editing"]::before {
-  background: #3b82f6;
+
+/* ring: state 色のインセット枠（影は維持） */
+[data-accent="ring"] .status-card {
+  box-shadow:
+    var(--card-shadow-x) var(--card-shadow-y) var(--card-shadow-blur) var(--card-shadow-spread)
+      rgba(16, 19, 28, var(--card-shadow-alpha)),
+    inset 0 0 0 1.4px color-mix(in srgb, var(--state-color, transparent) 62%, transparent);
 }
-.status-card[data-state="done"]::before {
-  background: #16a34a;
+
+/* shadow: ドロップシャドウ自体を state 色に。白いカード＋角丸はそのまま、
+   足元のグローで状態をにじませる。接地用のニュートラル影と細い枠は維持。 */
+[data-accent="shadow"] .status-card {
+  box-shadow:
+    /* 色付き影: ニュートラル影と同じ blur／オフセット／spread（スライダー駆動）に揃える */
+    var(--card-shadow-x) var(--card-shadow-y) var(--card-shadow-blur) var(--card-shadow-spread)
+      color-mix(in srgb, var(--state-color, transparent) 55%, transparent),
+    /* ニュートラル影は既定のまま据え置き（他アクセントとシルエットを揃える） */
+    var(--card-shadow-x) var(--card-shadow-y) var(--card-shadow-blur) var(--card-shadow-spread)
+      rgba(16, 19, 28, var(--card-shadow-alpha)),
+    inset 0 0 0 1.2px rgba(29, 36, 51, 0.1);
 }
 
 /* ── Toggle + session count ── */
@@ -367,6 +491,40 @@ button {
 .ui-named {
   outline: 1.5px dashed #c026d3 !important;
   outline-offset: 2px;
+}
+
+/* ── drag hint（アバターはドラッグ可、の案内） ── */
+
+.pg-drag-hint {
+  position: absolute;
+  left: 12px;
+  top: 12px;
+  z-index: 5;
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: rgba(16, 19, 28, 0.72);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  pointer-events: none;
+  animation: drag-hint-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes drag-hint-pulse {
+  0%,
+  100% {
+    opacity: 0.62;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pg-drag-hint {
+    animation: none;
+    opacity: 0.85;
+  }
 }
 
 /* ── current-animation debug badge ── */
@@ -548,6 +706,13 @@ button {
 .pg-empty {
   margin: 0;
   font-size: 12px;
+  color: var(--muted);
+}
+
+.pg-note {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
   color: var(--muted);
 }
 

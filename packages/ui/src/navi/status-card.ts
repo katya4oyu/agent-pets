@@ -5,17 +5,23 @@
 // 任意の親へ append する（このモジュールは append しない）。
 
 import { type StatusCardData, type SourceId, cardMessage, cardDir } from "./state";
-import { sourceConfig } from "./source-badge";
+import { type BadgeVariant, sourceConfig, sourceSvg } from "./source-badge";
 
 export interface StatusCardCallbacks {
   /** 閉じるボタン押下。引数は createStatusCard に渡した id。 */
   onClose: (id: string) => void;
 }
 
+export interface StatusCardOptions {
+  /** ソースバッジの配色。既定 "mono"（従来どおり）。 */
+  badge?: BadgeVariant;
+}
+
 export function createStatusCard(
   id: string,
   data: StatusCardData,
   cb: StatusCardCallbacks,
+  opts?: StatusCardOptions,
 ): HTMLElement {
   const card = document.createElement("div");
   card.className = "status-card";
@@ -26,7 +32,6 @@ export function createStatusCard(
     <p class="status-card-title"></p>
     <p class="message"></p>
     <p class="cwd-label" hidden></p>
-    <span class="status-card-tail" aria-hidden="true"></span>
   `;
   card
     .querySelector<HTMLButtonElement>(".status-card-close")
@@ -34,11 +39,15 @@ export function createStatusCard(
       e.stopPropagation();
       cb.onClose(id);
     });
-  updateStatusCard(card, data);
+  updateStatusCard(card, data, opts);
   return card;
 }
 
-export function updateStatusCard(card: HTMLElement, data: StatusCardData): void {
+export function updateStatusCard(
+  card: HTMLElement,
+  data: StatusCardData,
+  opts?: StatusCardOptions,
+): void {
   card.dataset.state = data.state;
   card.dataset.source = data.source;
 
@@ -56,16 +65,19 @@ export function updateStatusCard(card: HTMLElement, data: StatusCardData): void 
     cwdLabel.hidden = !dir;
   }
 
+  const variant: BadgeVariant = opts?.badge ?? "mono";
   const cfg = sourceConfig[data.source as SourceId];
   if (sourceBadge) {
     if (cfg) {
-      sourceBadge.innerHTML = cfg.svg;
+      sourceBadge.innerHTML = sourceSvg(cfg, variant);
       sourceBadge.dataset.source = data.source;
+      sourceBadge.dataset.variant = variant;
       sourceBadge.title = cfg.label;
     } else {
       // 未知ソース: ロゴ無し・ソース名をツールチップに
       sourceBadge.innerHTML = "";
       delete sourceBadge.dataset.source;
+      delete sourceBadge.dataset.variant;
       sourceBadge.title = data.source;
     }
   }
