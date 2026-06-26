@@ -235,7 +235,8 @@ button {
   transition: opacity 120ms ease, background 120ms ease, color 120ms ease;
 }
 
-.status-card:hover .status-card-close {
+.status-card:hover .status-card-close,
+.status-card.peek-close .status-card-close {
   opacity: 1;
   pointer-events: auto;
 }
@@ -278,8 +279,10 @@ button {
   transition: opacity 120ms ease;
 }
 
-/* カード hover でソースバッジは退き、左上スロットを close へ譲る（crossfade）。 */
-.status-card:hover .source-badge {
+/* カード hover（desktop）／peek-close（タッチでタップ時）でソースバッジは退き、
+   左上スロットを close へ譲る（crossfade）。 */
+.status-card:hover .source-badge,
+.status-card.peek-close .source-badge {
   opacity: 0;
 }
 

@@ -163,6 +163,21 @@ root.innerHTML = `
 const stage = root.querySelector<HTMLElement>(".pg-stage")!;
 const shell = root.querySelector<HTMLElement>(".navi-shell")!;
 const stackEl = root.querySelector<HTMLElement>(".status-stack")!;
+
+// タッチ端末（hover 不可）は hover で✖を出せないので、タップで左上の close を peek 表示する。
+// **playground 限定の配慮**（app は desktop 専用で hover morph が正＝D4）。
+// 同じカードを再タップ／別カードをタップでトグル・切替。✖ 自体のタップは閉じる（status-card.ts 側）。
+stackEl.addEventListener("click", (e) => {
+  if (matchMedia("(hover: none)").matches !== true) return; // desktop は hover に任せる
+  const target = e.target as HTMLElement;
+  if (target.closest(".status-card-close")) return; // ✖ は閉じる（別ハンドラ）
+  const card = target.closest<HTMLElement>(".status-card");
+  if (!card) return;
+  const wasOpen = card.classList.contains("peek-close");
+  for (const el of cards.values()) el.classList.remove("peek-close");
+  if (!wasOpen) card.classList.add("peek-close");
+});
+
 const pet = root.querySelector<HTMLElement>("navi-pet")!;
 const toggleBtn = root.querySelector<HTMLButtonElement>(".status-toggle")!;
 const sessionCountEl = root.querySelector<HTMLElement>(".session-count")!;
