@@ -46,6 +46,8 @@ interface Params {
   lightFollow: boolean; // positional shadow: ウィンドウ位置で影の向きを変える
   lightX: number; // 仮想光源の水平位置（0=左端 / 0.5=中央 / 1=右端）
   lightStrength: number; // 横方向の最大オフセット(px)
+  lightBlurGain: number; // 横距離で増えるぼかし量(px)（raking light）
+  lightFade: number; // 横距離で薄くなる割合（0=変化なし / 1=端で透明）
   maxVisible: number;
   fps: number; // 0 = pet.json 既定
   displayMode: DisplayMode;
@@ -72,6 +74,8 @@ const params: Params = {
   lightFollow: true,
   lightX: 0.5,
   lightStrength: 12,
+  lightBlurGain: 10,
+  lightFade: 0.35,
   maxVisible: 3,
   fps: 0,
   displayMode: "show",
@@ -235,12 +239,17 @@ function applyPetPosition(): void {
 }
 
 // positional shadow: デスクトップ上に固定した仮想光源（上空・水平位置 lightX）から、
-// ウィンドウ（＝アバター）の位置に応じた影の横方向オフセットを計算する。
-// 光源より右にいれば影は右へ、左にいれば左へ倒れる（相似三角形の水平射影）。
-// y（落ち込み量）は据え置き＝光源は常に高い位置にある前提なので、影は必ず下に落ちる。
+// ウィンドウ（＝アバター）の位置に応じた影を計算する。blur / alpha もここが所有する
+// （apply() は base を持たず、follow OFF のときだけ base がそのまま出る）。
+//  - 向き: 光源より右にいれば影は右へ、左にいれば左へ倒れる（相似三角形の水平射影）。
+//  - 横距離 |ratio|: 光源から横に離れるほど raking light で影が長く・柔らかく・薄くなる。
+//  - y（落ち込み量）は据え置き＝光源は常に高い位置にある前提なので、影は必ず下に落ちる。
 function applyShadowVector(): void {
+  const s = shell.style;
   if (!params.lightFollow) {
-    shell.style.setProperty("--card-shadow-x", "0px");
+    s.setProperty("--card-shadow-x", "0px");
+    s.setProperty("--card-shadow-blur", `${params.shadowBlur}px`);
+    s.setProperty("--card-shadow-alpha", String(params.shadowAlpha));
     return;
   }
   const stageRect = stage.getBoundingClientRect();
@@ -249,8 +258,15 @@ function applyShadowVector(): void {
   const lx = stageRect.width * params.lightX; // 光源の水平位置
   const half = stageRect.width / 2 || 1;
   const ratio = Math.max(-1, Math.min(1, (cx - lx) / half));
-  const x = ratio * params.lightStrength;
-  shell.style.setProperty("--card-shadow-x", `${x.toFixed(1)}px`);
+  const dist = Math.abs(ratio); // 0=光源直下 / 1=画面端
+
+  const x = ratio * params.lightStrength; // 倒れる向き＋長さ
+  const blur = params.shadowBlur + dist * params.lightBlurGain; // 端ほど柔らかく
+  const alpha = params.shadowAlpha * (1 - dist * params.lightFade); // 端ほど薄く
+
+  s.setProperty("--card-shadow-x", `${x.toFixed(1)}px`);
+  s.setProperty("--card-shadow-blur", `${blur.toFixed(1)}px`);
+  s.setProperty("--card-shadow-alpha", alpha.toFixed(3));
 }
 
 // 現在見えているカードの位置を記録（FLIP の First）。
@@ -504,9 +520,8 @@ function apply(): void {
   s.setProperty("--card-offset-x", `${params.cardOffsetX}px`);
   s.setProperty("--card-offset-y", `${params.cardOffsetY}px`);
   s.setProperty("--card-shadow-y", `${params.shadowY}px`);
-  s.setProperty("--card-shadow-blur", `${params.shadowBlur}px`);
   s.setProperty("--card-shadow-spread", `${params.shadowSpread}px`);
-  s.setProperty("--card-shadow-alpha", String(params.shadowAlpha));
+  // --card-shadow-blur / --card-shadow-alpha は applyShadowVector() が所有（横距離で変動）
   applyShadowVector();
   s.setProperty("--card-max-visible", String(params.maxVisible));
   s.setProperty("--src-claude-code", params.colors["claude-code"]);
@@ -561,7 +576,7 @@ function refreshReadout(): void {
     "",
     `/* state-accent: ${params.accentStyle} · badge: ${params.badgeColor} · pet fps: ${params.fps > 0 ? params.fps : "pet.json default"} · display-mode: ${params.displayMode} · card-motion: ${params.motion ? "on" : "off"} */`,
     params.lightFollow
-      ? `/* positional shadow: ON · light-x ${params.lightX} · lean ±${params.lightStrength}px (--card-shadow-x はウィンドウ位置で動的) */`
+      ? `/* positional shadow: ON · light-x ${params.lightX} · lean ±${params.lightStrength}px · dist blur +${params.lightBlurGain}px · dist fade ${params.lightFade} (x/blur/alpha はウィンドウ位置で動的) */`
       : "/* positional shadow: OFF (光源は真上固定・影は真下) */",
   ];
   readoutCode.textContent = lines.join("\n");
@@ -1009,6 +1024,8 @@ function button(label: string, onClick: () => void): HTMLButtonElement {
   const defs = [
     { label: "Light X (0=left, 1=right)", min: 0, max: 1, step: 0.01, value: params.lightX, unit: "", onInput: (v: number) => (params.lightX = v) },
     { label: "Lean strength", min: 0, max: 24, value: params.lightStrength, unit: "px", onInput: (v: number) => (params.lightStrength = v) },
+    { label: "Distance blur gain", min: 0, max: 24, value: params.lightBlurGain, unit: "px", onInput: (v: number) => (params.lightBlurGain = v) },
+    { label: "Distance fade", min: 0, max: 0.8, step: 0.01, value: params.lightFade, unit: "", onInput: (v: number) => (params.lightFade = v) },
   ];
   for (const d of defs) {
     const orig = d.onInput;
@@ -1017,7 +1034,7 @@ function button(label: string, onClick: () => void): HTMLButtonElement {
   const note = document.createElement("p");
   note.className = "pg-note";
   note.textContent =
-    "デスクトップ上に固定した仮想光源（上空・水平位置 Light X）から、ウィンドウ位置に応じて影の向きを計算する。アバターを左右にドラッグすると影が光源と反対側へ倒れる。OFF で真下固定（光源は常に真上）。";
+    "デスクトップ上に固定した仮想光源（上空・水平位置 Light X）から、ウィンドウ位置に応じて影を計算する。左右にドラッグすると影が光源と反対側へ倒れ、横に離れるほど raking light で長く・柔らかく(Distance blur gain)・薄く(Distance fade)なる。OFF で真下固定（光源は常に真上）。";
   body.appendChild(note);
 }
 
