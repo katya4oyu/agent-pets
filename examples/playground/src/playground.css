@@ -238,11 +238,28 @@ button {
   color: #111827;
 }
 
+/* ── debug grid (playground only) ──
+ * カードの左上 (0,0) を原点に、4px 細グリッド＋8px 太グリッドをうっすら重ねる。
+ * バッジ/テキストの座標合わせを目視確認するための補助。data-grid="on" で表示。 */
+[data-grid="on"] .status-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  background-position: 0 0; /* カード左上を基準 */
+  background-image:
+    repeating-linear-gradient(to right, rgba(16, 19, 28, 0.16) 0 1px, transparent 1px 8px),
+    repeating-linear-gradient(to bottom, rgba(16, 19, 28, 0.16) 0 1px, transparent 1px 8px),
+    repeating-linear-gradient(to right, rgba(16, 19, 28, 0.06) 0 1px, transparent 1px 4px),
+    repeating-linear-gradient(to bottom, rgba(16, 19, 28, 0.06) 0 1px, transparent 1px 4px);
+}
+
 /* ── Source badge ── */
 
 .source-badge {
   position: absolute;
-  top: 8px;
+  top: 6px;
   left: 8px;
   display: flex;
   width: 22px;

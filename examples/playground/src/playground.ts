@@ -48,6 +48,7 @@ interface Params {
   accentStyle: AccentStyle; // state カラーの見せ方
   badgeColor: BadgeVariant; // ソースバッジ: mono（モノクロ）/ tint（単色）/ brand（公式配色）
   motion: boolean; // ステータスカードのマイクロモーション ON/OFF
+  grid: boolean; // デバッググリッド表示 ON/OFF
   colors: Record<SourceId, string>;
 }
 
@@ -69,6 +70,7 @@ const params: Params = {
   accentStyle: "rail",
   badgeColor: "mono",
   motion: true,
+  grid: false,
   colors: {
     "claude-code": sourceConfig["claude-code"].color,
     codex: sourceConfig.codex.color,
@@ -482,6 +484,7 @@ function apply(): void {
   s.setProperty("--src-copilot", params.colors.copilot);
 
   shell.dataset.accent = params.accentStyle;
+  shell.dataset.grid = params.grid ? "on" : "off";
 
   if (params.fps > 0) pet.setAttribute("fps", String(params.fps));
   else pet.removeAttribute("fps");
@@ -1006,6 +1009,20 @@ function button(label: string, onClick: () => void): HTMLButtonElement {
   note.className = "pg-note";
   note.textContent =
     "OS の reduced-motion を尊重（有効時は自動で無効）。アバターはドラッグで移動でき、スタックは象限に合わせて再配置される。";
+  body.appendChild(note);
+}
+
+// Debug
+{
+  const body = group("Debug");
+  toggle(body, "Grid overlay", params.grid, (v) => {
+    params.grid = v;
+    apply();
+  });
+  const note = document.createElement("p");
+  note.className = "pg-note";
+  note.textContent =
+    "カード左上 (0,0) を原点に 4px 細／8px 太のグリッドを重ねる。バッジやテキストの座標合わせ確認用（表示のみ・出力 CSS には含めない）。";
   body.appendChild(note);
 }
 
