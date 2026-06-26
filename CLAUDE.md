@@ -2,6 +2,11 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+> **決定ログ＝最優先で読む。** 重要な決定は @docs/decisions.md に集約する。**蒸し返す前に必ず参照**し、
+> そこに反する提案・実装をしないこと。会話で重要な決定をしたら、**その場で（実装と同じコミットで）**
+> decisions.md に 1 項目追記する（例: D1 ステータスカードは自動消滅させない）。口頭で決めて記録しない運用は禁止。
+> 用途分担: 決定=`decisions.md` / 用語=`glossary.md` / 視覚思想=`design-principles.md` / 未決の論点=`issues/`。
+
 See @README.md for overview, @docs/concept.md for project concept, and @docs/glossary.md for the **strict terminology table** (authoritative names + code identifiers — read it before naming UI parts; e.g. the cards above the avatar are **ステータスカード / status card**, not 吹き出し/toast/speech. Past sessions lost time confusing "codex 本家" with `codex-pet-web`). For the **visual design philosophy & principles** (身体性/physical presence as the spine — P1–P5 + a checklist for new UI), see @docs/design-principles.md; for the **concrete status-card spec** that applies them (badge variants / optical sizing / cap-height alignment, shadow model — gap-contained negative spread, positional/raking light), see @docs/status-card-design.md.
 
 ## Layout
@@ -46,6 +51,7 @@ navi-hook (Rust CLI, app/src-tauri/src/bin/navi_hook.rs)
 
 ## Project rules / gotchas
 
+- **Record decisions; don't re-litigate them.** Significant product/UX/architecture decisions live in `docs/decisions.md` (append-only). Read it before proposing changes; when a new decision is made, log it in the same commit. Already decided, do not revisit without explicitly superseding: **status cards never auto-dismiss** (D1), **app targets desktop only — mobile is a playground-only concern** (D2), **state's primary cue is the top-right status icon** (D3).
 - **Don't pre-implement the future vision.** The navi roadmap (Operator Core / Skills / Outbound) is aspirational; current safe scope is **Phase 1 only — non-breaking internal refactors** (`docs/navi-roadmap.md`). Confirm before structural changes.
 - **Product is named "navi"** but the repo/config stay `agent-pets`; rename is deferred (`issues/3d107c`).
 - **Vite 8 / Node floor**: builds use Vite 8 (Vitest 4), which bundles with **Rolldown, not esbuild** (Rolldown forbids mutating the `generateBundle` `bundle` object — rename output files in `writeBundle` instead). Vite 8 needs Node `>=22.12` (or `>=20.19`).
