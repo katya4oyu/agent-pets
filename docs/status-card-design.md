@@ -1,8 +1,12 @@
-# ステータスカードの視覚デザイン（思想・意図）
+# ステータスカードの視覚デザイン（具体仕様・適用値）
 
-> playground（`examples/playground`）で詰めた **ステータスカード**まわりの見た目の設計判断を、
+> **これは具体ドキュメント**（事例＝ステータスカードの実装値・式・コード識別子）。
+> **思想・原則の正は `docs/design-principles.md`**（身体性を背骨にした P1–P5）。本書はその**最初の適用例**で、
+> 各判断には対応する原則（P1…）を併記する。新 UI は原則側から導き、結果を本書形式でここへ追記する。
+>
+> playground（`examples/playground`）で詰めた **ステータスカード**まわりの設計判断を、
 > 「なぜその値・その挙動なのか」まで含めて記録する。値の確定は playground、用語の正は
-> `docs/glossary.md`、思想の背景は `docs/concept.md`。ここは**意図のドキュメント**。
+> `docs/glossary.md`、思想の背景は `docs/concept.md`。
 >
 > 対象コード:
 > - `examples/playground/src/playground.css` … 実際の `.status-card` / `.source-badge` スタイルと CSS 変数。

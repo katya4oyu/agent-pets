@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-See @README.md for overview, @docs/concept.md for project concept, and @docs/glossary.md for the **strict terminology table** (authoritative names + code identifiers — read it before naming UI parts; e.g. the cards above the avatar are **ステータスカード / status card**, not 吹き出し/toast/speech. Past sessions lost time confusing "codex 本家" with `codex-pet-web`). For the **visual design intent** of the status card (source badge variants / optical sizing / cap-height alignment, and the shadow model — gap-contained negative spread, positional/raking light), see @docs/status-card-design.md.
+See @README.md for overview, @docs/concept.md for project concept, and @docs/glossary.md for the **strict terminology table** (authoritative names + code identifiers — read it before naming UI parts; e.g. the cards above the avatar are **ステータスカード / status card**, not 吹き出し/toast/speech. Past sessions lost time confusing "codex 本家" with `codex-pet-web`). For the **visual design philosophy & principles** (身体性/physical presence as the spine — P1–P5 + a checklist for new UI), see @docs/design-principles.md; for the **concrete status-card spec** that applies them (badge variants / optical sizing / cap-height alignment, shadow model — gap-contained negative spread, positional/raking light), see @docs/status-card-design.md.
 
 ## Layout
 
