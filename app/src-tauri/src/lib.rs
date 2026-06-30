@@ -46,6 +46,7 @@ impl TrayMenuAction {
             "setup-hooks-claude-code" => Some(Self::SetupHooks("claude-code")),
             "setup-hooks-codex" => Some(Self::SetupHooks("codex")),
             "setup-hooks-copilot" => Some(Self::SetupHooks("copilot")),
+            "setup-hooks-cursor" => Some(Self::SetupHooks("cursor")),
             "always-on-top" => Some(Self::ToggleAlwaysOnTop),
             "open-pets-folder" => Some(Self::OpenPetsFolder),
             "quit-navi" => Some(Self::Quit),
@@ -73,7 +74,10 @@ struct PetSelectionPayload {
 }
 
 pub fn is_valid_hook_source(source: &str) -> bool {
-    matches!(source, "claude-code" | "codex" | "copilot")
+    matches!(
+        source,
+        "claude-code" | "codex" | "copilot" | "cursor"
+    )
 }
 
 pub fn cli_info() -> String {
@@ -136,7 +140,7 @@ fn parse_event_source_from_path(url: &str) -> String {
         return String::new();
     };
     match source {
-        "claude-code" | "codex" | "copilot" => source.to_string(),
+        "claude-code" | "codex" | "copilot" | "cursor" => source.to_string(),
         _ => String::new(),
     }
 }
@@ -236,6 +240,21 @@ fn write_json_atomic(path: &std::path::Path, value: &Value) -> Result<(), String
         .map_err(|e| format!("{} への書き込みに失敗: {e}", tmp.display()))?;
     std::fs::rename(&tmp, path).map_err(|e| format!("rename に失敗: {e}"))?;
     Ok(())
+}
+
+fn upsert_cursor_hook(hooks_obj: &mut serde_json::Map<String, Value>, event: &str, cmd: &str) {
+    let arr = hooks_obj
+        .entry(event.to_string())
+        .or_insert_with(|| Value::Array(vec![]));
+    if let Some(arr) = arr.as_array_mut() {
+        arr.retain(|entry| {
+            !entry
+                .get("command")
+                .and_then(Value::as_str)
+                .is_some_and(|c| c.contains("navi"))
+        });
+        arr.push(serde_json::json!({"command": cmd, "timeout": 1}));
+    }
 }
 
 fn upsert_codex_hook(hooks_obj: &mut serde_json::Map<String, Value>, event: &str, cmd: &str) {
@@ -580,6 +599,37 @@ fn setup_copilot(cmd: &str) -> Result<String, String> {
     Ok(format!("Copilot: {}", path.display()))
 }
 
+fn setup_cursor(cmd: &str) -> Result<String, String> {
+    let home = home_dir()?;
+    let path = home.join(".cursor").join("hooks.json");
+
+    let mut root = read_json_or_empty(&path)?;
+    {
+        let root_obj = root
+            .as_object_mut()
+            .ok_or("hooks.json はオブジェクトではありません")?;
+        root_obj.entry("version").or_insert(serde_json::json!(1));
+
+        let hooks_sub = root_obj
+            .entry("hooks")
+            .or_insert_with(|| Value::Object(Default::default()))
+            .as_object_mut()
+            .ok_or("hooks フィールドはオブジェクトではありません")?;
+
+        for event in [
+            "beforeSubmitPrompt",
+            "preToolUse",
+            "postToolUseFailure",
+            "stop",
+        ] {
+            upsert_cursor_hook(hooks_sub, event, cmd);
+        }
+    }
+
+    write_json_atomic(&path, &root)?;
+    Ok(format!("Cursor: {}", path.display()))
+}
+
 // ── Tauri commands ────────────────────────────────────────────────────────────
 
 #[tauri::command]
@@ -599,10 +649,12 @@ fn setup_hooks(agent: String) -> Result<String, String> {
         "claude-code" => try_run(setup_claude_code(&make_cmd("claude-code"))),
         "codex" => try_run(setup_codex(&make_cmd("codex"))),
         "copilot" => try_run(setup_copilot(&make_cmd("copilot"))),
+        "cursor" => try_run(setup_cursor(&make_cmd("cursor"))),
         "all" => {
             try_run(setup_claude_code(&make_cmd("claude-code")));
             try_run(setup_codex(&make_cmd("codex")));
             try_run(setup_copilot(&make_cmd("copilot")));
+            try_run(setup_cursor(&make_cmd("cursor")));
         }
         other => return Err(format!("不明なエージェント: {other}")),
     }
@@ -761,6 +813,7 @@ fn setup_tray(app: &mut tauri::App) -> tauri::Result<()> {
         .text("setup-hooks-claude-code", "Claude Code")
         .text("setup-hooks-codex", "Codex")
         .text("setup-hooks-copilot", "Copilot")
+        .text("setup-hooks-cursor", "Cursor")
         .build()?;
     let always_on_top = CheckMenuItem::with_id(
         app,
@@ -933,6 +986,7 @@ mod tests {
         );
         assert_eq!(parse_event_source_from_path("/events/codex"), "codex");
         assert_eq!(parse_event_source_from_path("/events/copilot"), "copilot");
+        assert_eq!(parse_event_source_from_path("/events/cursor"), "cursor");
         assert_eq!(parse_event_source_from_path("/events"), "");
         assert_eq!(parse_event_source_from_path("/events?source=codex"), "");
     }
@@ -991,6 +1045,10 @@ mod tests {
             TrayMenuAction::from_id("setup-hooks-copilot"),
             Some(TrayMenuAction::SetupHooks("copilot"))
         );
+        assert_eq!(
+            TrayMenuAction::from_id("setup-hooks-cursor"),
+            Some(TrayMenuAction::SetupHooks("cursor"))
+        );
     }
 
     #[test]
@@ -1010,6 +1068,7 @@ mod tests {
         assert!(is_valid_hook_source("codex"));
         assert!(is_valid_hook_source("claude-code"));
         assert!(is_valid_hook_source("copilot"));
+        assert!(is_valid_hook_source("cursor"));
         assert!(!is_valid_hook_source("unknown"));
         assert!(!is_valid_hook_source(""));
     }

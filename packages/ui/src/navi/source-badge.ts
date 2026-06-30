@@ -1,4 +1,4 @@
-// ソースバッジ（claude-code / codex / copilot）。
+// ソースバッジ（claude-code / codex / copilot / cursor）。
 //
 // `@lobehub/icons-static-svg` の実ブランドロゴを `?raw` で取り込む。グリフは 2 系統:
 //  - currentColor グリフ（単色塗り）… mono / tint で使用
@@ -16,6 +16,7 @@ import claudeCodeColorSvg from "@lobehub/icons-static-svg/icons/claudecode-color
 import codexSvg from "@lobehub/icons-static-svg/icons/codex.svg?raw";
 import codexColorSvg from "@lobehub/icons-static-svg/icons/codex-color.svg?raw";
 import githubCopilotSvg from "@lobehub/icons-static-svg/icons/githubcopilot.svg?raw";
+import cursorSvg from "@lobehub/icons-static-svg/icons/cursor.svg?raw";
 
 /** バッジのアイコン配色。mono=モノクロ（共通グレー）/ tint=単色（ブランド色）/ brand=公式配色。 */
 export type BadgeVariant = "mono" | "tint" | "brand";
@@ -48,6 +49,12 @@ export const sourceConfig: Record<SourceId, SourceConfig> = {
     color: "#6F42C1",
     svg: githubCopilotSvg,
     colorSvg: githubCopilotSvg, // GitHub Copilot は公式単色のみ
+  },
+  cursor: {
+    label: "Cursor",
+    color: "#000000",
+    svg: cursorSvg,
+    colorSvg: cursorSvg, // 公式単色のみ
   },
 };
 

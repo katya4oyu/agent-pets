@@ -55,6 +55,10 @@ struct HookInput {
     timestamp: Option<String>,
     terminal_program: Option<String>,
     terminal_session_id: Option<String>,
+    /// Cursor `stop` hook: `"completed" | "aborted" | "error"`.
+    stop_status: Option<String>,
+    /// Cursor `beforeShellExecution` / `afterShellExecution` top-level command.
+    shell_command: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -86,6 +90,14 @@ struct SnakeHookPayload {
     terminal_program: Option<String>,
     #[serde(default)]
     terminal_session_id: Option<String>,
+    #[serde(default)]
+    conversation_id: Option<String>,
+    #[serde(default)]
+    workspace_roots: Option<Vec<String>>,
+    #[serde(default)]
+    status: Option<String>,
+    #[serde(default)]
+    command: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -157,7 +169,9 @@ fn is_edit_tool(name: &str) -> bool {
 
 fn map_state(event_name: &str, tool_name: Option<&str>) -> Option<(AgentState, &'static str)> {
     match event_name {
-        "UserPromptSubmit" | "userPromptSubmitted" => Some((AgentState::Thinking, "Thinking")),
+        "UserPromptSubmit" | "userPromptSubmitted" | "beforeSubmitPrompt" => {
+            Some((AgentState::Thinking, "Thinking"))
+        }
         "PreToolUse" | "preToolUse" => {
             let (state, label) = match tool_name {
                 Some(n) if is_shell_tool(n) => (AgentState::Running, "Running shell"),
@@ -174,8 +188,12 @@ fn map_state(event_name: &str, tool_name: Option<&str>) -> Option<(AgentState, &
         "PostToolUseFailure" | "postToolUseFailure" | "ErrorOccurred" | "errorOccurred"
         | "PermissionDenied" | "permissionDenied" => Some((AgentState::Error, "Tool failed")),
         "StopFailure" | "stopFailure" => Some((AgentState::Error, "Stopped with error")),
-        "Stop" | "AgentStop" | "agentStop" | "SessionEnd" | "sessionEnd" | "SubagentStop"
-        | "subagentStop" => Some((AgentState::Done, "Done")),
+        "beforeShellExecution" | "afterShellExecution" => Some((AgentState::Running, "Running shell")),
+        "beforeReadFile" => Some((AgentState::Running, "Reading file")),
+        "afterFileEdit" => Some((AgentState::Editing, "Editing")),
+        "beforeMCPExecution" | "afterMCPExecution" => Some((AgentState::Running, "Using MCP")),
+        "Stop" | "stop" | "AgentStop" | "agentStop" | "SessionEnd" | "sessionEnd"
+        | "SubagentStop" | "subagentStop" => Some((AgentState::Done, "Done")),
         "SessionStart" | "sessionStart" => Some((AgentState::Done, "Ready")),
         "SubagentStart" | "subagentStart" => Some((AgentState::Running, "Subagent starting")),
         "PreCompact" | "preCompact" => Some((AgentState::Thinking, "Compacting...")),
@@ -221,9 +239,20 @@ fn normalize_hook_input(input: HookInput, source: &str) -> Option<HookEvent> {
         label = "Tool failed";
     }
 
+    if matches!(input.event_name.as_str(), "Stop" | "stop" | "AgentStop" | "agentStop") {
+        match input.stop_status.as_deref() {
+            Some("error" | "aborted") => {
+                state = AgentState::Error;
+                label = "Stopped with error";
+            }
+            _ => {}
+        }
+    }
+
     let message = match input.event_name.as_str() {
-        "UserPromptSubmit" | "userPromptSubmitted" => input.message,
+        "UserPromptSubmit" | "userPromptSubmitted" | "beforeSubmitPrompt" => input.message,
         "Notification" | "notification" => input.message,
+        "beforeShellExecution" | "afterShellExecution" => input.shell_command,
         "PreToolUse" | "preToolUse" => {
             extract_tool_message(input.tool_input.as_ref(), input.tool_name.as_deref())
         }
@@ -251,6 +280,12 @@ fn normalize_hook_input(input: HookInput, source: &str) -> Option<HookEvent> {
 }
 
 fn snake_to_input(payload: SnakeHookPayload) -> HookInput {
+    let cwd = payload.cwd.or_else(|| {
+        payload
+            .workspace_roots
+            .as_ref()
+            .and_then(|roots| roots.first().cloned())
+    });
     HookInput {
         event_name: payload.hook_event_name,
         tool_name: payload.tool_name,
@@ -263,11 +298,15 @@ fn snake_to_input(payload: SnakeHookPayload) -> HookInput {
             .or(payload.reason)
             .or(payload.error_context),
         notification_type: payload.notification_type,
-        session_id: payload.session_id,
-        cwd: payload.cwd,
+        session_id: payload
+            .session_id
+            .or(payload.conversation_id),
+        cwd,
         timestamp: payload.timestamp,
         terminal_program: payload.terminal_program,
         terminal_session_id: payload.terminal_session_id,
+        stop_status: payload.status,
+        shell_command: payload.command,
     }
 }
 
@@ -326,6 +365,8 @@ fn copilot_camel_to_input(payload: CopilotCamelPayload) -> Option<HookInput> {
         timestamp: payload.timestamp.map(|ts| ts.to_string()),
         terminal_program: None,
         terminal_session_id: None,
+        stop_status: None,
+        shell_command: None,
     })
 }
 
@@ -697,6 +738,72 @@ mod tests {
             map_state("subagentStart", None),
             Some((AgentState::Running, "Subagent starting"))
         );
+    }
+
+    #[test]
+    fn cursor_before_submit_prompt_is_thinking() {
+        assert_eq!(
+            map_state("beforeSubmitPrompt", None),
+            Some((AgentState::Thinking, "Thinking"))
+        );
+    }
+
+    #[test]
+    fn cursor_pre_tool_use_shell_is_running_shell() {
+        assert_eq!(
+            map_state("preToolUse", Some("Shell")),
+            Some((AgentState::Running, "Running shell"))
+        );
+    }
+
+    #[test]
+    fn cursor_stop_completed_is_done() {
+        let payload = json!({
+            "hook_event_name": "stop",
+            "status": "completed",
+            "conversation_id": "conv-1"
+        });
+        let event = normalize(&payload, "cursor").unwrap();
+        assert!(matches!(event.state, AgentState::Done));
+        assert_eq!(event.session_id.as_deref(), Some("conv-1"));
+    }
+
+    #[test]
+    fn cursor_stop_error_is_error() {
+        let payload = json!({
+            "hook_event_name": "stop",
+            "status": "error"
+        });
+        let event = normalize(&payload, "cursor").unwrap();
+        assert!(matches!(event.state, AgentState::Error));
+        assert_eq!(event.label, "Stopped with error");
+    }
+
+    #[test]
+    fn cursor_before_submit_prompt_uses_prompt_message() {
+        let payload = json!({
+            "hook_event_name": "beforeSubmitPrompt",
+            "prompt": "Build the feature",
+            "conversation_id": "conv-2",
+            "workspace_roots": ["/workspace"]
+        });
+        let event = normalize(&payload, "cursor").unwrap();
+        assert!(matches!(event.state, AgentState::Thinking));
+        assert_eq!(event.message.as_deref(), Some("Build the feature"));
+        assert_eq!(event.session_id.as_deref(), Some("conv-2"));
+        assert_eq!(event.cwd.as_deref(), Some("/workspace"));
+    }
+
+    #[test]
+    fn cursor_before_shell_execution_uses_command() {
+        let payload = json!({
+            "hook_event_name": "beforeShellExecution",
+            "command": "pnpm test",
+            "cwd": "/workspace"
+        });
+        let event = normalize(&payload, "cursor").unwrap();
+        assert!(matches!(event.state, AgentState::Running));
+        assert_eq!(event.message.as_deref(), Some("pnpm test"));
     }
 
     #[test]

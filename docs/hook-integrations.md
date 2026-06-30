@@ -136,6 +136,49 @@ event keys. Agent Pets must parse both documented payload formats.
 
 Agent Pets setup should target local Copilot CLI user hooks first.
 
+## Cursor
+
+Source: https://cursor.com/docs/hooks
+
+User hooks:
+
+- `~/.cursor/hooks.json`
+
+Project hooks:
+
+- `<repo>/.cursor/hooks.json`
+
+Cursor uses native camelCase hook keys. navi setup registers a minimal observe-only
+set:
+
+- `beforeSubmitPrompt`
+- `preToolUse`
+- `postToolUseFailure`
+- `stop`
+
+Example generated entry:
+
+```json
+{
+  "version": 1,
+  "hooks": {
+    "beforeSubmitPrompt": [
+      { "command": "~/.navi/bin/navi-hook hook cursor", "timeout": 1 }
+    ]
+  }
+}
+```
+
+Cursor-specific payload notes:
+
+- Session id is usually `conversation_id` (not `session_id`); navi normalizes both.
+- Tool name for shell is `Shell` (not Claude's `Bash`).
+- `stop` carries `status`: `completed` | `aborted` | `error`.
+- Permission-style events have no dedicated hook; use `beforeMCPExecution` if needed later.
+
+CLI-only integration and Cloud Agent hooks are out of scope for navi setup (IDE
+`hooks.json` only).
+
 ## Normalized State Mapping
 
 | Incoming event | Agent Pets state | Suggested label |

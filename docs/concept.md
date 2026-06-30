@@ -5,7 +5,7 @@
 
 ## これは何か
 
-- **現状**: `agent-pets` は、コーディングエージェント（**OpenAI Codex / Claude Code / GitHub Copilot CLI**）のライフサイクル hook を受け取り、デスクトップ常駐のペットとして状態を可視化する**受動的な通知ビューア**。
+- **現状**: `agent-pets` は、コーディングエージェント（**OpenAI Codex / Claude Code / GitHub Copilot CLI / Cursor IDE**）のライフサイクル hook を受け取り、デスクトップ常駐のペットとして状態を可視化する**受動的な通知ビューア**。
 - **将来像「navi」**: ロックマンEXE のネットナビ的な、能動的オペレーター・コンパニオンへ段階的に育てる構想。詳細は `docs/navi-architecture.md` / `docs/navi-roadmap.md`。
 - **実装ゲート（重要）**: 将来像（Operator Core / Skill / Outbound 操縦 等）は「体験設計＋E2E テスト計画が固まるまで先回り実装しない」。現状の安全圏は **Phase 1（外部仕様を変えない内部リファクタ）まで**。
 - **リネーム据え置き**: GitHub リポジトリ名は `agent-pets` のまま。製品表示名は `navi`。
@@ -26,7 +26,7 @@
 ## アーキテクチャ概観
 
 ```text
-Codex / Claude Code / Copilot CLI
+Codex / Claude Code / Copilot CLI / Cursor IDE
    │  hook → stdin JSON
    ▼
 navi-hook (Rust CLI)  →  POST /events/<source>   (fire-and-forget, ~100-250ms)
