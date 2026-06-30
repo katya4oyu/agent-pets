@@ -31,3 +31,12 @@
 - 作業前に `CLAUDE.md` と関連 `docs/` を読む。命名は `glossary.md` に従う。
 - 構造変更は Phase 1（外部仕様を変えない内部リファクタ）まで。先回り実装はしない（`navi-roadmap.md`）。
 - 決定・設計に変更が出たら、コードと**同じコミットで**該当ドキュメントを更新する（記録の後回し禁止）。
+
+## Cursor Cloud specific instructions
+
+Standard dev/test/build commands live in `CLAUDE.md` (`pnpm dev`, `pnpm tauri:dev`, `pnpm test`, `pnpm check:rust`, etc.). The update script runs `pnpm install` on startup. Non-obvious gotchas for this VM:
+
+- **Rust must be stable ≥ 1.85.** A transitive Tauri dep (`zvariant_derive`) needs `edition2024`, so an older default toolchain (e.g. 1.83) fails `pnpm check:rust`/`tauri:dev` with "feature `edition2024` is required". Use `rustup default stable` (this VM has stable installed).
+- **Running the full Tauri app (`pnpm tauri:dev`) needs a display + WebKit workarounds.** Export `DISPLAY=:1` (the VNC/xfce desktop) and set `WEBKIT_DISABLE_COMPOSITING_MODE=1` and `WEBKIT_DISABLE_DMABUF_RENDERER=1` before launching, or the webview renders blank. `libEGL ... DRI3` warnings on startup are harmless.
+- **The HTTP event receiver uses a random port,** written to `~/.navi/port` after the app boots. Drive the pet end-to-end without `navi-hook` by POSTing JSON to `http://127.0.0.1:$(cat ~/.navi/port)/events/<claude-code|codex|copilot>` (e.g. `{"hook_event_name":"UserPromptSubmit","session_id":"s1","message":"hi","cwd":"/workspace"}` → Thinking; `Stop` → Done). Event/state mapping lives in `app/src-tauri/core/src/lib.rs`.
+- **`pnpm dev` / playground need no Rust** — `app/src/bridge.ts` mocks Tauri in a plain browser, so UI-only work runs without the desktop build.
