@@ -87,6 +87,7 @@ const params: Params = {
     "claude-code": sourceConfig["claude-code"].color,
     codex: sourceConfig.codex.color,
     copilot: sourceConfig.copilot.color,
+    cursor: sourceConfig.cursor.color,
   },
 };
 
@@ -103,6 +104,7 @@ const sampleMessages: Record<SourceId, string> = {
   "claude-code": "Editing src/state.ts — adding the priority table",
   codex: "Waiting for approval to run `cargo test`",
   copilot: "Generating completions for navi-pet.ts",
+  cursor: "Refactoring hook integration in lib.rs",
 };
 
 function nextId(source: SourceId): string {
@@ -542,6 +544,7 @@ function apply(): void {
   s.setProperty("--src-claude-code", params.colors["claude-code"]);
   s.setProperty("--src-codex", params.colors.codex);
   s.setProperty("--src-copilot", params.colors.copilot);
+  s.setProperty("--src-cursor", params.colors.cursor);
 
   shell.dataset.accent = params.accentStyle;
   shell.dataset.grid = params.grid ? "on" : "off";
@@ -586,6 +589,7 @@ function refreshReadout(): void {
     `  --src-claude-code: ${params.colors["claude-code"]};`,
     `  --src-codex: ${params.colors.codex};`,
     `  --src-copilot: ${params.colors.copilot};`,
+    `  --src-cursor: ${params.colors.cursor};`,
     "  --badge-mono: #52525b;",
     "}",
     "",
@@ -1082,6 +1086,10 @@ function button(label: string, onClick: () => void): HTMLButtonElement {
   });
   color(body, "Copilot", params.colors.copilot, (v) => {
     params.colors.copilot = v;
+    apply();
+  });
+  color(body, "Cursor", params.colors.cursor, (v) => {
+    params.colors.cursor = v;
     apply();
   });
 }

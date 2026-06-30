@@ -12,7 +12,7 @@ export type AgentState =
   | "done"
   | "error";
 
-export type SourceId = "claude-code" | "codex" | "copilot";
+export type SourceId = "claude-code" | "codex" | "copilot" | "cursor";
 
 /** スタックの可視性ポリシー（表示モード）。 */
 export type DisplayMode = "show" | "hide" | "auto";

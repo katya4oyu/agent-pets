@@ -68,6 +68,7 @@ button {
   --src-claude-code: #cc785c;
   --src-codex: #10a37f;
   --src-copilot: #6f42c1;
+  --src-cursor: #000000;
   --badge-mono: #52525b; /* mono バリアント共通のモノクロ色 */
 }
 
@@ -302,6 +303,9 @@ button {
 .source-badge[data-source="copilot"] {
   --badge-glyph-scale: 0.94;
 }
+.source-badge[data-source="cursor"] {
+  --badge-glyph-scale: 0.92;
+}
 
 /* mono: 全ソース共通の中立グレー（モノクロ）。 */
 .source-badge[data-variant="mono"] {
@@ -318,11 +322,17 @@ button {
 .source-badge[data-variant="tint"][data-source="copilot"] {
   color: var(--src-copilot);
 }
+.source-badge[data-variant="tint"][data-source="cursor"] {
+  color: var(--src-cursor);
+}
 
-/* brand: GitHub Copilot は公式単色（currentColor）のため、ブランド近似のダークで塗る。
+/* brand: GitHub Copilot / Cursor は公式単色（currentColor）のため、ブランド近似のダークで塗る。
    codex / claude の brand は SVG 自身の配色（白タイル＋グラデ / クレイ）が出る。 */
 .source-badge[data-variant="brand"][data-source="copilot"] {
   color: #1f2328;
+}
+.source-badge[data-variant="brand"][data-source="cursor"] {
+  color: #000000;
 }
 
 /* badge shine while active */

@@ -57,7 +57,7 @@
 
 | 正式名 | 定義 | コード識別子 |
 |---|---|---|
-| **source** | どのエージェントか。`claude-code` / `codex` / `copilot` の 3 つのみ。 | `HookEventPayload.source`, `sourceConfig` |
+| **source** | どのエージェントか。`claude-code` / `codex` / `copilot` / `cursor` の 4 つ。 | `HookEventPayload.source`, `sourceConfig` |
 | **セッション** (session) | 1 つのエージェント実行単位。1 セッション = 1 ステータスカード。キーは `source:session_id`（無ければ source）。 | `sessionKey()`, `sessions` Map（`app/src/main.ts`） |
 | **イベント** (event) | hook が送る状態変化 1 件。`POST /events/<source>` で受信。 | `HookEventPayload`, `"agent-state-changed"` |
 | **navi-hook** | 各エージェントの hook から stdin を受け、上記イベントを POST する Rust CLI。 | `app/src-tauri/src/bin/navi_hook.rs` |

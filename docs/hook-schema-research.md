@@ -10,6 +10,7 @@ be checked against upstream docs later.
 - Claude Code Hooks reference: https://code.claude.com/docs/en/hooks
 - GitHub Copilot hooks reference: https://docs.github.com/en/enterprise-cloud@latest/copilot/reference/hooks-reference
 - GitHub Copilot CLI hooks guide: https://docs.github.com/en/enterprise-cloud@latest/copilot/how-tos/copilot-cli/customize-copilot/use-hooks
+- Cursor Hooks: https://cursor.com/docs/hooks
 
 ## Design Conclusions
 
@@ -361,3 +362,54 @@ The adapter should parse these fields in order.
 | post tool success | `running` | `Tool completed` |
 | post tool failure or error occurred | `error` | `Tool failed` |
 | stop/session end | `done` | `Done` |
+
+## Cursor
+
+Source: https://cursor.com/docs/hooks
+
+### Config and Runtime
+
+- Hooks live in `~/.cursor/hooks.json` (user) or `<repo>/.cursor/hooks.json` (project).
+- Command hooks receive JSON on stdin; blocking hooks may write JSON to stdout.
+- navi uses observe-only hooks: empty stdout, exit `0`, `timeout: 1` second.
+- Event names are camelCase (`beforeSubmitPrompt`, `preToolUse`, `stop`, ...).
+
+### Cursor Common Input Fields
+
+Every command hook receives one JSON object on stdin, including:
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `hook_event_name` | `string` | Same as hook key (`preToolUse`, `beforeSubmitPrompt`, `stop`, ...). |
+| `conversation_id` | `string` | Stable session id across turns. navi maps to `session_id`. |
+| `generation_id` | `string` | Changes per user message. |
+| `workspace_roots` | `string[]` | Fallback for `cwd` when `cwd` is absent. |
+| `prompt` | `string` | User text on `beforeSubmitPrompt`. |
+| `tool_name` | `string` | e.g. `Shell`, `Write`, `Read`, `Task`, `MCP:<name>`. |
+| `tool_input` | `object` | Tool args; shell uses `{ "command": "...", "working_directory": "..." }`. |
+| `cwd` | `string` | Present on tool hooks. |
+| `command` | `string` | Full shell command on `beforeShellExecution` / `afterShellExecution`. |
+| `status` | `string` | On `stop`: `completed`, `aborted`, or `error`. |
+
+### navi Setup Events
+
+| Cursor hook | Purpose |
+| --- | --- |
+| `beforeSubmitPrompt` | User sent a prompt |
+| `preToolUse` | Tool about to run |
+| `postToolUseFailure` | Tool failed |
+| `stop` | Agent turn ended |
+
+### Cursor → navi State Mapping
+
+| Cursor event | navi state | Label |
+| --- | --- | --- |
+| `beforeSubmitPrompt` | `thinking` | `Thinking` |
+| `preToolUse`, shell | `running` | `Running shell` |
+| `preToolUse`, write/edit | `editing` | `Editing` |
+| `beforeShellExecution` | `running` | `Running shell` |
+| `afterFileEdit` | `editing` | `Editing` |
+| `postToolUseFailure` | `error` | `Tool failed` |
+| `stop`, completed | `done` | `Done` |
+| `stop`, error/aborted | `error` | `Stopped with error` |
+| `subagentStart` | `running` | `Subagent starting` |
